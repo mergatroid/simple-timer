@@ -39,6 +39,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ce67b933-034a-44bd-93a8-52bab9c88b7b"
+      }
+    },
+    "owner": "mergatroid"
   }
 }
