@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   getTimerStatus,
@@ -9,15 +9,31 @@ import {
 
 type UseWorkoutTimerOptions = {
   initialSeconds?: number;
+  onComplete?: () => void;
 };
 
-export function useWorkoutTimer({ initialSeconds = 60 }: UseWorkoutTimerOptions = {}) {
+export function useWorkoutTimer({ initialSeconds = 60, onComplete }: UseWorkoutTimerOptions = {}) {
   const [durationSeconds, setDurationSeconds] = useState(initialSeconds);
   const [remainingSeconds, setRemainingSeconds] = useState(initialSeconds);
   const [isRunning, setIsRunning] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
 
   const status: TimerStatus = getTimerStatus(remainingSeconds, isRunning, hasStarted);
+  const onCompleteRef = useRef(onComplete);
+  const hasAlertedRef = useRef(false);
+
+  onCompleteRef.current = onComplete;
+
+  useEffect(() => {
+    if (status === 'finished' && !hasAlertedRef.current) {
+      hasAlertedRef.current = true;
+      onCompleteRef.current?.();
+    }
+
+    if (status !== 'finished') {
+      hasAlertedRef.current = false;
+    }
+  }, [status]);
 
   useEffect(() => {
     if (!isRunning || remainingSeconds <= 0) {

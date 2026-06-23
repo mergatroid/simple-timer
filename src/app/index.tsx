@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useAudioPlayer } from 'expo-audio';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useWorkoutTimer } from '@/hooks/use-workout-timer';
+import { configureTimerAlertAudio, playTimerCompleteAlert } from '@/utils/timer-alert';
 import { formatTime } from '@/utils/workout-timer';
+
+const timerCompleteSound = require('@/assets/sounds/timer-complete.wav');
 
 const PRESETS = [30, 60, 90, 120];
 
@@ -16,8 +20,17 @@ export default function HomeScreen() {
   const [durationInput, setDurationInput] = useState('60');
   const [inputError, setInputError] = useState<string | null>(null);
 
+  const alertPlayer = useAudioPlayer(timerCompleteSound);
+
+  useEffect(() => {
+    configureTimerAlertAudio();
+  }, []);
+
   const { remainingSeconds, status, isRunning, start, pause, reset, setDuration, setDurationFromInput } =
-    useWorkoutTimer({ initialSeconds: 60 });
+    useWorkoutTimer({
+      initialSeconds: 60,
+      onComplete: () => playTimerCompleteAlert(alertPlayer),
+    });
 
   function handleApplyDuration() {
     const applied = setDurationFromInput(durationInput);
@@ -36,8 +49,9 @@ export default function HomeScreen() {
   }
 
   return (
+    <SafeAreaProvider style={styles.container}> 
     <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView edges={['top', 'bottom']}>
         <ThemedText type="title" style={styles.title}>
           Workout Timer
         </ThemedText>
@@ -47,7 +61,7 @@ export default function HomeScreen() {
 
         <ThemedView type="backgroundElement" style={styles.timerCard}>
           <ThemedText type="smallBold" themeColor="textSecondary">
-            {status === 'finished' ? 'Done' : isRunning ? 'Resting' : 'Ready'}
+            {status === 'finished' ? 'Done' : isRunning ? 'Working' : 'Ready'}
           </ThemedText>
           <ThemedText style={styles.timerDisplay}>{formatTime(remainingSeconds)}</ThemedText>
         </ThemedView>
@@ -138,26 +152,22 @@ export default function HomeScreen() {
             ]}>
             <ThemedText type="smallBold">Reset</ThemedText>
           </Pressable>
-        </ThemedView>
-      </SafeAreaView>
-    </ThemedView>
+          </ThemedView>
+        </SafeAreaView>
+      </ThemedView>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    flexDirection: 'row',
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.three,
+    paddingHorizontal: Spacing.two,
+    flexDirection: 'row'  ,
     justifyContent: 'center',
-  },
-  safeArea: {
-    flex: 1,
-    gap: Spacing.three,
-    justifyContent: 'center',
-    maxWidth: MaxContentWidth,
-    paddingHorizontal: Spacing.four,
-    paddingBottom: BottomTabInset + Spacing.three,
-  },
+  }, 
   title: {
     fontSize: 36,
     lineHeight: 40,
