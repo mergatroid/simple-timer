@@ -45,7 +45,7 @@ export default function WorkoutScreen() {
   useEffect(() => {
     setIsAdvancing(false);
     timer.reset();
-  }, [currentIndex, timer]);
+  }, [currentIndex]);
 
   // Animate button when state changes
   useEffect(() => {
