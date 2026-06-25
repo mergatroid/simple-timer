@@ -64,7 +64,8 @@ export default function WorkoutScreen() {
   // Calculate results when workout finishes
   useEffect(() => {
     if (isFinished && !workoutResult && workout) {
-      const totalTimeSeconds = Math.round((Date.now() - workoutStartTimeRef.current) / 1000);
+      // Use timer's elapsed seconds to match what user sees on display
+      const totalTimeSeconds = timer.elapsedSeconds;
       let totalReps = 0;
       let totalDistance = 0;
 
@@ -341,6 +342,12 @@ export default function WorkoutScreen() {
                               stepId: currentStep.id,
                               timestamp: now,
                             };
+                          }
+
+                          // Stop timer if on last step
+                          const isLastStep = stepIdx === workout.totalSteps - 1;
+                          if (isLastStep) {
+                            timer.pause();
                           }
 
                           // Prevent further clicks until state updates
