@@ -88,10 +88,9 @@ export class WorkoutPlayback {
     // Record completion time for current step
     this.recordStepCompletion(this.currentStepIndex);
 
-    // Stop timer
+    // Stop current timer
     this.stopTimer();
     this.elapsedSeconds = 0;
-    this.isRunning = false;
 
     // Move to next step
     this.currentStepIndex += 1;
@@ -99,7 +98,11 @@ export class WorkoutPlayback {
     // If we've reached the end, mark as finished
     if (this.currentStepIndex >= this.workout.totalSteps) {
       this.isFinished = true;
+      this.isRunning = false;
       this.finishWorkoutInternal();
+    } else {
+      // Automatically start the next step's timer
+      this.startTimer();
     }
   }
 
