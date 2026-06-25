@@ -19,6 +19,7 @@ export default function WorkoutScreen() {
   const theme = useTheme();
   const workout = getCurrentWorkout();
   const [playback, setPlayback] = useState<WorkoutPlayback | null>(null);
+  const [, setTick] = useState(0); // Force re-render on timer tick
   const buttonScaleRef = useRef(new Animated.Value(1));
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -30,7 +31,7 @@ export default function WorkoutScreen() {
 
       // Force re-render every second to show timer updates
       const interval = setInterval(() => {
-        setPlayback(prev => prev); // Trigger re-render
+        setTick(prev => prev + 1);
       }, 1000);
       timerIntervalRef.current = interval;
 
