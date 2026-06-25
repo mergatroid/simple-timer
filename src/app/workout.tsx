@@ -116,6 +116,8 @@ export default function WorkoutScreen() {
           playback.advanceStep();
         }
       }
+      // Force re-render immediately after state change
+      setTick(prev => prev + 1);
     } catch (error) {
       console.error('Workout action failed:', error);
     }
