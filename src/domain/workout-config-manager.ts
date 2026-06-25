@@ -69,70 +69,72 @@ export class WorkoutConfigManager {
 
   /**
    * Update a single configuration field.
-   * Validates immediately. Throws on invalid state.
+   * Validates immediately. Silently ignores invalid updates instead of throwing.
    */
   updateConfig(field: keyof WorkoutConfig, value: any): void {
+    // Skip null/undefined values
+    if (value === null || value === undefined) {
+      return;
+    }
+
     // Type-check based on field
     switch (field) {
       case 'selectedStations':
-        if (!Array.isArray(value)) throw new Error('selectedStations must be an array');
+        if (!Array.isArray(value)) return;
         this._config.selectedStations = value as StationId[];
         break;
 
       case 'selectedCardioTypes':
-        if (!Array.isArray(value)) throw new Error('selectedCardioTypes must be an array');
+        if (!Array.isArray(value)) return;
         this._config.selectedCardioTypes = value as CardioType[];
         break;
 
       case 'effortScale':
-        if (!['full', 'half', 'quarter'].includes(value))
-          throw new Error('Invalid effort scale');
+        if (!['full', 'half', 'quarter'].includes(value)) return;
         this._config.effortScale = value as EffortScale;
         break;
 
       case 'pairingRule':
-        if (!['before', 'after', 'random'].includes(value))
-          throw new Error('Invalid pairing rule');
+        if (!['before', 'after', 'random'].includes(value)) return;
         this._config.pairingRule = value as PairingRule;
         break;
 
       case 'runDistanceMode':
-        if (!['fixed', 'range'].includes(value)) throw new Error('Invalid distance mode');
+        if (!['fixed', 'range'].includes(value)) return;
         this._config.runDistanceMode = value as 'fixed' | 'range';
         break;
 
       case 'runDistanceFixed':
-        if (typeof value !== 'number' || value <= 0)
-          throw new Error('runDistanceFixed must be positive');
+        if (typeof value !== 'number' || value <= 0) return;
         this._config.runDistanceFixed = value;
         break;
 
       case 'runDistanceMin':
-        if (typeof value !== 'number' || value <= 0)
-          throw new Error('runDistanceMin must be positive');
+        if (typeof value !== 'number' || value <= 0) return;
         this._config.runDistanceMin = value;
         break;
 
       case 'runDistanceMax':
-        if (typeof value !== 'number' || value <= 0)
-          throw new Error('runDistanceMax must be positive');
+        if (typeof value !== 'number' || value <= 0) return;
         this._config.runDistanceMax = value;
         break;
 
+      case 'preset':
+        // Allow any preset value or undefined
+        this._config.preset = value as PresetId | undefined;
+        break;
+
       default:
-        throw new Error(`Unknown config field: ${field}`);
+        return; // Ignore unknown fields
     }
 
-    // Validate after update
+    // Always validate after update
     this.validate();
-
-    if (!this.isValid) {
-      throw new Error(`Config validation failed: ${this._validationError}`);
-    }
   }
 
   /**
    * Toggle a station on/off.
+   * Silently ignores toggle if it would make config invalid.
    */
   toggleStation(stationId: StationId): void {
     const idx = this._config.selectedStations.indexOf(stationId);
@@ -145,7 +147,8 @@ export class WorkoutConfigManager {
     const error = this.getValidationError(testConfig);
 
     if (error) {
-      throw new Error(`Config validation failed: ${error}`);
+      // Silently ignore - don't allow operations that would make config invalid
+      return;
     }
 
     this._config.selectedStations = newStations;
@@ -153,6 +156,7 @@ export class WorkoutConfigManager {
 
   /**
    * Toggle a cardio type on/off.
+   * Silently ignores toggle if it would make config invalid.
    */
   toggleCardioType(cardioType: CardioType): void {
     const idx = this._config.selectedCardioTypes.indexOf(cardioType);
@@ -165,7 +169,8 @@ export class WorkoutConfigManager {
     const error = this.getValidationError(testConfig);
 
     if (error) {
-      throw new Error(`Config validation failed: ${error}`);
+      // Silently ignore - don't allow operations that would make config invalid
+      return;
     }
 
     this._config.selectedCardioTypes = newCardioTypes;
@@ -173,7 +178,7 @@ export class WorkoutConfigManager {
 
   /**
    * Apply a preset (beginner/intermediate/advanced).
-   * Overwrites configuration with preset values.
+   * Overwrites configuration with preset values and sets default cardio type.
    */
   applyPreset(presetId: PresetId): void {
     const preset = PRESETS[presetId];
@@ -185,11 +190,12 @@ export class WorkoutConfigManager {
     const [minStations, maxStations] = PRESET_STATION_COUNTS[presetId];
     const stationCount = Math.floor(Math.random() * (maxStations - minStations + 1)) + minStations;
 
-    // Apply preset config and select N stations
+    // Apply preset config, select N stations, and default to 'run' cardio type
     this._config = {
       ...this._config,
       ...preset.config,
       selectedStations: STATION_IDS.slice(0, stationCount) as StationId[],
+      selectedCardioTypes: ['run'],
       preset: presetId,
     };
 
