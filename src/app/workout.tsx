@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/refs, react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps, react-hooks/refs */
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View, Share, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,105 +10,56 @@ import { WorkoutStepDisplay } from '@/components/workout-step-display';
 import { WorkoutList } from '@/components/workout-list';
 import { Spacing } from '@/constants/theme';
 import { clearCurrentWorkout, getCurrentWorkout } from '@/domain/workout-store';
+import { WorkoutPlayback } from '@/domain/workout-playback';
 import { useTheme } from '@/hooks/use-theme';
-import { useWorkoutPlayer } from '@/hooks/use-workout-player';
-import { useWorkoutTimer } from '@/hooks/use-workout-timer';
 import { formatTime } from '@/utils/workout-timer';
 import { formatWorkoutForSharing, formatGeneratedWorkoutForSharing, formatCompletionMetric } from '@/utils/share-workout';
-import { WorkoutResult } from '@/domain/types';
 
 export default function WorkoutScreen() {
   const theme = useTheme();
   const workout = getCurrentWorkout();
-  const [workoutResult, setWorkoutResult] = useState<WorkoutResult | null>(null);
-  const [isAdvancing, setIsAdvancing] = useState(false);
-  const stepTimesRef = useRef<{ stepId: string; timestamp: number }[]>([]);
-  const workoutStartTimeRef = useRef<number>(0);
-  const buttonScaleRef = useRef(new Animated.Value(1)).current;
-  const currentIndexRef = useRef(0);
+  const [playback, setPlayback] = useState<WorkoutPlayback | null>(null);
+  const buttonScaleRef = useRef(new Animated.Value(1));
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize hooks unconditionally
-  const workoutPlayer = useWorkoutPlayer(workout || { steps: [], totalSteps: 0, id: '', generatedAt: 0 });
-
-  const timer = useWorkoutTimer();
-
-  const { currentStep, isFinished, progress, currentIndex, advance } = workoutPlayer;
-  const { isRunning } = timer;
-
-  // Track current index and clear advancing flag when step changes
+  // Initialize playback state machine on mount
   useEffect(() => {
-    currentIndexRef.current = currentIndex;
-    setIsAdvancing(false);
-  }, [currentIndex]);
+    if (workout) {
+      const pb = new WorkoutPlayback(workout);
+      setPlayback(pb);
 
-  // Animate button when state changes (buttonScaleRef is a persistent ref, not a dependency)
+      // Force re-render every second to show timer updates
+      const interval = setInterval(() => {
+        setPlayback(prev => prev); // Trigger re-render
+      }, 1000);
+      timerIntervalRef.current = interval;
+
+      return () => {
+        pb.cleanup();
+        if (interval) clearInterval(interval);
+      };
+    }
+  }, [workout]);
+
+  // Animate button on state changes
   useEffect(() => {
+    if (!playback) return;
+
     Animated.sequence([
-      Animated.timing(buttonScaleRef, {
+      Animated.timing(buttonScaleRef.current, {
         toValue: 0.95,
         duration: 100,
         useNativeDriver: true,
       }),
-      Animated.timing(buttonScaleRef, {
+      Animated.timing(buttonScaleRef.current, {
         toValue: 1,
         duration: 100,
         useNativeDriver: true,
       }),
     ]).start();
-  }, [isRunning, currentIndex]);
+  }, [playback?.state.isRunning, playback?.state.currentStepIndex]);
 
-  // Calculate results when workout finishes
-  useEffect(() => {
-    if (isFinished && !workoutResult && workout) {
-      // Use timer's elapsed seconds to match what user sees on display
-      const totalTimeSeconds = timer.elapsedSeconds;
-      let totalReps = 0;
-      let totalDistance = 0;
-
-      // Calculate split times between steps
-      const completions = workout.steps.map((step, index) => {
-        if (step.unit === 'reps') totalReps += step.value;
-        // Only count cardio distances, not station distances
-        if (step.unit === 'm' && step.kind === 'cardio') totalDistance += step.value;
-
-        const completion = stepTimesRef.current[index];
-        let lapTimeSeconds = 0;
-
-        if (completion) {
-          // For first step, calculate from workout start
-          // For subsequent steps, calculate from previous step's completion
-          const previousCompletion = index === 0
-            ? workoutStartTimeRef.current
-            : stepTimesRef.current[index - 1]?.timestamp;
-
-          if (previousCompletion) {
-            lapTimeSeconds = Math.round((completion.timestamp - previousCompletion) / 1000);
-          }
-        }
-
-        return {
-          stepId: step.id,
-          label: step.label,
-          kind: step.kind,
-          lapTimeSeconds,
-          reps: step.unit === 'reps' ? step.value : undefined,
-          distance: step.unit === 'm' ? step.value : undefined,
-        };
-      });
-
-      const result: WorkoutResult = {
-        completions,
-        totalTimeSeconds,
-        totalReps,
-        totalDistance,
-        stationLapTimes: {},
-      };
-
-      setWorkoutResult(result);
-    }
-  }, [isFinished, workout, timer.elapsedSeconds]);
-
-  if (!workout) {
+  if (!workout || !playback) {
     return (
       <SafeAreaView style={styles.container}>
         <ThemedText type="title">No workout loaded</ThemedText>
@@ -119,6 +70,8 @@ export default function WorkoutScreen() {
     );
   }
 
+  const state = playback.state;
+  const { currentStep, isFinished, progress, elapsedSeconds, isRunning, workoutResult } = state;
 
   const handleEndWorkout = () => {
     clearCurrentWorkout();
@@ -149,6 +102,24 @@ export default function WorkoutScreen() {
     }
   };
 
+  const handleButtonPress = () => {
+    try {
+      if (!isRunning) {
+        // Start the current step
+        playback.startStep();
+      } else {
+        // Advance to next step (or finish if on last)
+        if (playback.isOnLastStep()) {
+          playback.finishWorkout();
+        } else {
+          playback.advanceStep();
+        }
+      }
+    } catch (error) {
+      console.error('Workout action failed:', error);
+    }
+  };
+
   return (
     <View style={styles.screenContainer}>
       <SafeAreaView style={[styles.safeAreaInner, { overflow: 'visible' }]} edges={['top']}>
@@ -158,13 +129,13 @@ export default function WorkoutScreen() {
               Time Elapsed
             </ThemedText>
             <ThemedText type="title" style={styles.timerDisplay}>
-              {formatTime(timer.elapsedSeconds)}
+              {formatTime(elapsedSeconds)}
             </ThemedText>
           </View>
         )}
       </SafeAreaView>
       <SafeAreaView style={styles.container} edges={['bottom']}>
-      {isFinished ? (
+        {isFinished ? (
           <ScrollView contentContainerStyle={styles.finishContainer} showsVerticalScrollIndicator={false}>
             <ThemedText type="title" style={styles.finishTitle}>
               Complete
@@ -249,7 +220,6 @@ export default function WorkoutScreen() {
               </Pressable>
               <Pressable
                 onPress={() => {
-                  setWorkoutResult(null);
                   clearCurrentWorkout();
                   router.replace('/');
                 }}
@@ -278,86 +248,51 @@ export default function WorkoutScreen() {
                   showsVerticalScrollIndicator={false}
                 >
                   {/* Progress Header */}
-                <View style={styles.header}>
-                  <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center', flex: 1 }}>
-                    Step {currentIndex + 1} of {workout.totalSteps}
-                  </ThemedText>
-                  <Pressable onPress={handleShareWorkout} style={styles.shareIconButton}>
-                    <Share2 size={20} color={theme.text} />
-                  </Pressable>
-                </View>
-                <View
-                  style={[
-                    styles.progressBar,
-                    {
-                      backgroundColor: theme.backgroundElement,
-                    },
-                  ]}
-                >
+                  <View style={styles.header}>
+                    <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center', flex: 1 }}>
+                      Step {state.currentStepIndex + 1} of {workout.totalSteps}
+                    </ThemedText>
+                    <Pressable onPress={handleShareWorkout} style={styles.shareIconButton}>
+                      <Share2 size={20} color={theme.text} />
+                    </Pressable>
+                  </View>
                   <View
                     style={[
-                      styles.progressFill,
+                      styles.progressBar,
                       {
-                        backgroundColor: theme.accent,
-                        width: `${progress * 100}%`,
+                        backgroundColor: theme.backgroundElement,
                       },
                     ]}
-                  />
-                </View>
+                  >
+                    <View
+                      style={[
+                        styles.progressFill,
+                        {
+                          backgroundColor: theme.accent,
+                          width: `${progress * 100}%`,
+                        },
+                      ]}
+                    />
+                  </View>
 
-              {/* Current Step Display */}
-              <WorkoutStepDisplay step={currentStep} variant="current" />
+                  {/* Current Step Display */}
+                  <WorkoutStepDisplay step={currentStep} variant="current" />
 
-              {/* Control Button */}
-              {(() => {
-                const isStart = !isRunning;
-                const isFinish = isRunning && currentIndex === workout.totalSteps - 1;
-                const isInverted = isStart || isFinish;
-
-                return (
-                  <Animated.View style={{ transform: [{ scale: buttonScaleRef }] }}>
+                  {/* Control Button */}
+                  <Animated.View style={{ transform: [{ scale: buttonScaleRef.current }] }}>
                     <Pressable
-                      onPress={() => {
-                        if (isAdvancing) return; // Prevent double-clicks
-
-                        if (!isRunning) {
-                          // Not started yet - start the timer
-                          const now = Date.now();
-
-                          if (!workoutStartTimeRef.current) {
-                            workoutStartTimeRef.current = now;
-                          }
-                          timer.start();
-                        } else {
-                          // Already running - record completion time and advance
-                          const now = Date.now();
-                          const stepIdx = currentIndexRef.current;
-
-                          if (currentStep) {
-                            stepTimesRef.current[stepIdx] = {
-                              stepId: currentStep.id,
-                              timestamp: now,
-                            };
-                          }
-
-                          // Stop timer if on last step
-                          const isLastStep = stepIdx === workout.totalSteps - 1;
-                          if (isLastStep) {
-                            timer.pause();
-                          }
-
-                          // Prevent further clicks until state updates
-                          setIsAdvancing(true);
-                          advance();
-                        }
-                      }}
-                      disabled={isAdvancing}
+                      onPress={handleButtonPress}
+                      disabled={false}
                       style={[
                         styles.nextButton,
                         {
-                          backgroundColor: isAdvancing || isInverted ? theme.backgroundElement : theme.accent,
-                          opacity: isAdvancing ? 0.5 : 1,
-                          ...(isInverted && !isAdvancing && {
+                          backgroundColor: isRunning
+                            ? theme.accent
+                            : theme.backgroundElement,
+                          ...(isRunning && {
+                            borderWidth: 0,
+                          }),
+                          ...(!isRunning && {
                             borderWidth: 2,
                             borderColor: theme.accent,
                           }),
@@ -366,27 +301,25 @@ export default function WorkoutScreen() {
                     >
                       <ThemedText
                         type="smallBold"
-                        style={{ color: isInverted ? theme.accent : theme.accentText }}
+                        style={{ color: isRunning ? theme.accentText : theme.accent }}
                       >
-                        {isStart
+                        {!isRunning
                           ? 'START'
-                          : isFinish
+                          : playback.isOnLastStep()
                             ? 'FINISH'
                             : 'NEXT'}
                       </ThemedText>
                     </Pressable>
                   </Animated.View>
-                );
-              })()}
 
-              {workout.steps.length > 0 && (
-                <View style={styles.upcomingSection}>
-                  <ThemedText type="smallBold" themeColor="textSecondary" style={styles.upcomingHeader}>
-                    WORKOUT
-                  </ThemedText>
-                  <WorkoutList steps={workout.steps} currentIndex={currentIndex} />
-                </View>
-              )}
+                  {workout.steps.length > 0 && (
+                    <View style={styles.upcomingSection}>
+                      <ThemedText type="smallBold" themeColor="textSecondary" style={styles.upcomingHeader}>
+                        WORKOUT
+                      </ThemedText>
+                      <WorkoutList steps={workout.steps} currentIndex={state.currentStepIndex} />
+                    </View>
+                  )}
 
                   <Pressable
                     onPress={handleEndWorkout}
@@ -407,7 +340,7 @@ export default function WorkoutScreen() {
           </>
         )}
       </SafeAreaView>
-      </View>
+    </View>
   );
 }
 
