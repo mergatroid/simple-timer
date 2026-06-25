@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "glent",
-    "slug": "glent",
+    "name": "WODFather",
+    "slug": "wodfather",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "glent",
+    "scheme": "wodfather",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"

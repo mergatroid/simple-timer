@@ -41,3 +41,13 @@ example
 # generated native folders
 /ios
 /android
+
+.node_modules/
+.expo/
+.md
+
+.claude/
+.agents/
+.vscode/
+.gitignore
+.gitignore  

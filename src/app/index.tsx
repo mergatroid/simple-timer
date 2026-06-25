@@ -1,252 +1,345 @@
-import { useAudioPlayer } from 'expo-audio';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, TextInput } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { CardioChip } from '@/components/cardio-chip';
+import { DistancePicker } from '@/components/distance-picker';
+import { PresetChip } from '@/components/preset-chip';
+import { StationCard } from '@/components/station-card';
 import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
 import { Spacing } from '@/constants/theme';
+import { CARDIO_DEFS, CARDIO_TYPES } from '@/domain/cardio';
+import { STATION_DEFS, STATION_IDS } from '@/domain/stations';
+import { setCurrentWorkout } from '@/domain/workout-store';
 import { useTheme } from '@/hooks/use-theme';
-import { useWorkoutTimer } from '@/hooks/use-workout-timer';
-import { configureTimerAlertAudio, playTimerCompleteAlert } from '@/utils/timer-alert';
-import { formatTime } from '@/utils/workout-timer';
+import { useWodWorkout } from '@/hooks/use-wod-workout';
 
-const timerCompleteSound = require('@/assets/sounds/timer-complete.wav');
-
-const PRESETS = [30, 60, 90, 120];
-
-export default function HomeScreen() {
+export default function ConfigureScreen() {
   const theme = useTheme();
-  const [durationInput, setDurationInput] = useState('60');
-  const [inputError, setInputError] = useState<string | null>(null);
+  const {
+    config,
+    isValid,
+    validationError,
+    applyPreset,
+    toggleStation,
+    toggleCardio,
+    setEffortScale,
+    setPairingRule,
+    setRunDistanceMode,
+    setRunDistanceFixed,
+    setRunDistanceRange,
+    generate,
+  } = useWodWorkout();
 
-  const alertPlayer = useAudioPlayer(timerCompleteSound);
 
-  useEffect(() => {
-    configureTimerAlertAudio();
-  }, []);
-
-  const { remainingSeconds, status, isRunning, start, pause, reset, setDuration, setDurationFromInput } =
-    useWorkoutTimer({
-      initialSeconds: 60,
-      onComplete: () => playTimerCompleteAlert(alertPlayer),
-    });
-
-  function handleApplyDuration() {
-    const applied = setDurationFromInput(durationInput);
-    if (!applied) {
-      setInputError('Enter seconds (e.g. 90) or mm:ss (e.g. 1:30)');
-      return;
-    }
-
-    setInputError(null);
-  }
-
-  function handlePreset(seconds: number) {
-    setDuration(seconds);
-    setDurationInput(String(seconds));
-    setInputError(null);
-  }
+  const handleGenerate = () => {
+    if (!isValid) return;
+    const workout = generate();
+    setCurrentWorkout(workout);
+    router.push('/workout');
+  };
 
   return (
-    <SafeAreaProvider style={styles.container}> 
-    <ThemedView style={styles.container}>
-      <SafeAreaView edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <ThemedText type="title" style={styles.title}>
-          Workout Timer
+          WODFather
         </ThemedText>
         <ThemedText themeColor="textSecondary" style={styles.subtitle}>
-          Set your rest interval and start the countdown
+          Hyrox Workout Generator
         </ThemedText>
 
-        <ThemedView type="backgroundElement" style={styles.timerCard}>
+        <View style={styles.section}>
           <ThemedText type="smallBold" themeColor="textSecondary">
-            {status === 'finished' ? 'Done' : isRunning ? 'Working' : 'Ready'}
+            Difficulty
           </ThemedText>
-          <ThemedText style={styles.timerDisplay}>{formatTime(remainingSeconds)}</ThemedText>
-        </ThemedView>
+          <View style={styles.presetRow}>
+            <PresetChip
+              label="Beginner"
+              isSelected={config.preset === 'beginner'}
+              onPress={() => applyPreset('beginner')}
+            />
+            <PresetChip
+              label="Intermediate"
+              isSelected={config.preset === 'intermediate'}
+              onPress={() => applyPreset('intermediate')}
+            />
+            <PresetChip
+              label="Advanced"
+              isSelected={config.preset === 'advanced'}
+              onPress={() => applyPreset('advanced')}
+            />
+          </View>
+        </View>
 
-        <ThemedView style={styles.section}>
+        <View style={styles.section}>
           <ThemedText type="smallBold" themeColor="textSecondary">
-            Custom time
+            Effort Scale
           </ThemedText>
-          <ThemedView style={styles.durationRow}>
-            <ThemedView type="backgroundElement" style={styles.durationInputWrap}>
-              <TextInput
-                value={durationInput}
-                onChangeText={setDurationInput}
-                placeholder="60 or 1:30"
-                placeholderTextColor={theme.textSecondary}
-                keyboardType="numbers-and-punctuation"
-                style={[styles.input, { color: theme.text }]}
-                editable={!isRunning}
-              />
-            </ThemedView>
-            <Pressable
-              onPress={handleApplyDuration}
-              disabled={isRunning}
-              style={({ pressed }) => [
-                styles.secondaryButton,
-                { backgroundColor: theme.backgroundSelected },
-                isRunning && styles.buttonDisabled,
-                pressed && !isRunning && styles.buttonPressed,
-              ]}>
-              <ThemedText type="smallBold">Set</ThemedText>
-            </Pressable>
-          </ThemedView>
-          {inputError ? (
-            <ThemedText type="small" style={styles.errorText}>
-              {inputError}
+          <View style={styles.presetRow}>
+            <PresetChip
+              label="Full"
+              isSelected={config.effortScale === 'full'}
+              onPress={() => setEffortScale('full')}
+            />
+            <PresetChip
+              label="1/2"
+              isSelected={config.effortScale === 'half'}
+              onPress={() => setEffortScale('half')}
+            />
+            <PresetChip
+              label="1/4"
+              isSelected={config.effortScale === 'quarter'}
+              onPress={() => setEffortScale('quarter')}
+            />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <ThemedText type="smallBold" themeColor="textSecondary">
+              Stations (min 3)
             </ThemedText>
-          ) : null}
-        </ThemedView>
+            <ThemedText type="small" themeColor="textSecondary">
+              {config.selectedStations.length} selected
+            </ThemedText>
+          </View>
+          <View style={styles.stationGrid}>
+            {STATION_IDS.map((stationId) => {
+              const def = STATION_DEFS[stationId];
+              const multiplier = config.effortScale === 'full' ? 1.0 : config.effortScale === 'half' ? 0.5 : 0.25;
+              const scaledValue = Math.ceil((def.fullValue * multiplier) / 5) * 5;
+              const metricDisplay = `${scaledValue}${def.unit}`;
+              return (
+                <StationCard
+                  key={stationId}
+                  stationId={stationId}
+                  label={def.label}
+                  metric={metricDisplay}
+                  isSelected={config.selectedStations.includes(stationId)}
+                  onPress={() => toggleStation(stationId)}
+                />
+              );
+            })}
+          </View>
+        </View>
 
-        <ThemedView style={styles.section}>
+        <View style={styles.section}>
           <ThemedText type="smallBold" themeColor="textSecondary">
-            Quick presets
+            Cardio Elements
           </ThemedText>
-          <ThemedView style={styles.presets}>
-            {PRESETS.map((seconds) => (
-              <Pressable
-                key={seconds}
-                onPress={() => handlePreset(seconds)}
-                disabled={isRunning}
-                style={({ pressed }) => [
-                  styles.presetButton,
-                  { backgroundColor: theme.backgroundSelected },
-                  isRunning && styles.buttonDisabled,
-                  pressed && !isRunning && styles.buttonPressed,
-                ]}>
-                <ThemedText type="smallBold">{formatTime(seconds)}</ThemedText>
-              </Pressable>
-            ))}
-          </ThemedView>
-        </ThemedView>
+          <View style={styles.cardioRow}>
+            {CARDIO_TYPES.map((type) => {
+              const def = CARDIO_DEFS[type];
+              return (
+                <CardioChip
+                  key={type}
+                  label={def.label}
+                  isSelected={config.selectedCardioTypes.includes(type)}
+                  onPress={() => toggleCardio(type)}
+                />
+              );
+            })}
+          </View>
+        </View>
 
-        <ThemedView style={styles.controls}>
-          {!isRunning ? (
+        <View style={styles.section}>
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            Run Distance
+          </ThemedText>
+          <View style={styles.segmentControl}>
             <Pressable
-              onPress={start}
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}>
-              <ThemedText type="smallBold" style={styles.primaryButtonText}>
-                {status === 'finished' ? 'Restart' : status === 'paused' ? 'Resume' : 'Start'}
+              onPress={() => setRunDistanceMode('fixed')}
+              style={[
+                styles.segmentButton,
+                styles.segmentButtonLeft,
+                {
+                  backgroundColor: config.runDistanceMode === 'fixed' ? theme.accent : theme.backgroundElement,
+                },
+              ]}
+            >
+              <ThemedText themeColor={config.runDistanceMode === 'fixed' ? 'accentText' : 'text'}>
+                Fixed
               </ThemedText>
             </Pressable>
+            <Pressable
+              onPress={() => setRunDistanceMode('range')}
+              style={[
+                styles.segmentButton,
+                styles.segmentButtonRight,
+                {
+                  backgroundColor: config.runDistanceMode === 'range' ? theme.accent : theme.backgroundElement,
+                },
+              ]}
+            >
+              <ThemedText themeColor={config.runDistanceMode === 'range' ? 'accentText' : 'text'}>
+                Range
+              </ThemedText>
+            </Pressable>
+          </View>
+          {config.runDistanceMode === 'fixed' ? (
+            <DistancePicker
+              label="Distance"
+              value={config.runDistanceFixed}
+              min={100}
+              max={2000}
+              step={100}
+              onChange={setRunDistanceFixed}
+            />
           ) : (
-            <Pressable
-              onPress={pause}
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}>
-              <ThemedText type="smallBold" style={styles.primaryButtonText}>
-                Pause
-              </ThemedText>
-            </Pressable>
+            <>
+              <DistancePicker
+                label="Min Distance"
+                value={config.runDistanceMin}
+                min={100}
+                max={config.runDistanceMax}
+                step={100}
+                onChange={(min) => setRunDistanceRange(min, config.runDistanceMax)}
+              />
+              <DistancePicker
+                label="Max Distance"
+                value={config.runDistanceMax}
+                min={config.runDistanceMin}
+                max={2000}
+                step={100}
+                onChange={(max) => setRunDistanceRange(config.runDistanceMin, max)}
+              />
+            </>
           )}
+        </View>
 
-          <Pressable
-            onPress={reset}
-            style={({ pressed }) => [
-              styles.secondaryButton,
-              styles.resetButton,
-              { backgroundColor: theme.backgroundSelected },
-              pressed && styles.buttonPressed,
-            ]}>
-            <ThemedText type="smallBold">Reset</ThemedText>
-          </Pressable>
-          </ThemedView>
-        </SafeAreaView>
-      </ThemedView>
-    </SafeAreaProvider>
+        <View style={styles.section}>
+          <ThemedText type="smallBold" themeColor="textSecondary">
+            Pairing
+          </ThemedText>
+          <View style={styles.presetRow}>
+            <PresetChip
+              label="Before"
+              isSelected={config.pairingRule === 'before'}
+              onPress={() => setPairingRule('before')}
+            />
+            <PresetChip
+              label="After"
+              isSelected={config.pairingRule === 'after'}
+              onPress={() => setPairingRule('after')}
+            />
+            <PresetChip
+              label="Random"
+              isSelected={config.pairingRule === 'random'}
+              onPress={() => setPairingRule('random')}
+            />
+          </View>
+        </View>
+
+        {validationError && (
+          <ThemedText style={[styles.errorText, { color: theme.danger }]}>
+            {validationError}
+          </ThemedText>
+        )}
+
+        <Pressable
+          onPress={handleGenerate}
+          disabled={!isValid}
+          style={({ pressed }) => [
+            styles.generateButton,
+            {
+              backgroundColor: isValid ? theme.accent : theme.backgroundElement,
+              opacity: pressed && isValid ? 0.9 : 1,
+            },
+          ]}
+        >
+          <ThemedText
+            type="smallBold"
+            themeColor={isValid ? 'accentText' : 'textSecondary'}
+            style={styles.generateButtonText}
+          >
+            GENERATE WORKOUT
+          </ThemedText>
+        </Pressable>
+
+        <View style={styles.spacer} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.three,
-    paddingHorizontal: Spacing.two,
-    flexDirection: 'row'  ,
-    justifyContent: 'center',
-  }, 
-  title: {
-    fontSize: 36,
-    lineHeight: 40,
   },
-  subtitle: {
+  scrollContent: {
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.five,
+  },
+  title: {
+    marginTop: Spacing.three,
     marginBottom: Spacing.one,
   },
-  timerCard: {
-    alignItems: 'center',
-    borderRadius: Spacing.four,
-    gap: Spacing.two,
-    paddingVertical: Spacing.five,
-  },
-  timerDisplay: {
-    fontSize: 72,
-    fontVariant: ['tabular-nums'],
-    fontWeight: '600',
-    lineHeight: 80,
+  subtitle: {
+    marginBottom: Spacing.four,
   },
   section: {
-    gap: Spacing.two,
+    marginBottom: Spacing.four,
   },
-  durationRow: {
+  sectionHeader: {
     flexDirection: 'row',
-    gap: Spacing.two,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.two,
   },
-  durationInputWrap: {
-    flex: 1,
-    borderRadius: Spacing.three,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
+  presetRow: {
+    flexDirection: 'row',
+    gap: 0,
   },
-  input: {
-    fontSize: 16,
-    lineHeight: 24,
-    padding: 0,
-  },
-  presets: {
+  stationGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: Spacing.two,
+    justifyContent: 'space-between',
   },
-  presetButton: {
-    borderRadius: Spacing.three,
-    minWidth: 72,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    alignItems: 'center',
+  cardioRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
   },
-  controls: {
-    gap: Spacing.two,
-    marginTop: Spacing.two,
+  segmentControl: {
+    flexDirection: 'row',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginVertical: Spacing.two,
   },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: '#3c87f7',
-    borderRadius: Spacing.three,
+  segmentButton: {
+    flex: 1,
     paddingVertical: Spacing.three,
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-  },
-  secondaryButton: {
-    alignItems: 'center',
-    borderRadius: Spacing.three,
     justifyContent: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.three,
-  },
-  resetButton: {
     alignItems: 'center',
   },
-  buttonPressed: {
-    opacity: 0.85,
+  segmentButtonLeft: {
+    borderTopLeftRadius: 8,
+    borderBottomLeftRadius: 8,
   },
-  buttonDisabled: {
-    opacity: 0.5,
+  segmentButtonRight: {
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
   },
   errorText: {
-    color: '#E5484D',
+    marginBottom: Spacing.three,
+    textAlign: 'center',
+  },
+  generateButton: {
+    paddingVertical: Spacing.three,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: Spacing.three,
+  },
+  generateButtonText: {
+    letterSpacing: 1,
+  },
+  spacer: {
+    height: Spacing.five,
   },
 });
