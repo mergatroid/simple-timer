@@ -1,4 +1,4 @@
-import { Workout, WorkoutStep, WorkoutResult, StepCompletion } from './types';
+import { Workout, WorkoutStep, WorkoutResult } from './types';
 
 export interface WorkoutState {
   readonly currentStepIndex: number;

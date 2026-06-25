@@ -1,4 +1,4 @@
-import { Workout, WorkoutStep, WorkoutResult, StepCompletion } from './types';
+import { Workout, WorkoutStep, WorkoutResult } from './types';
 
 /**
  * WorkoutResultCalculator is a deep pure module for aggregating workout results.
@@ -7,15 +7,6 @@ import { Workout, WorkoutStep, WorkoutResult, StepCompletion } from './types';
  * Interface: 3 pure functions
  * Implementation: lap time calculation, metric aggregation, distance filtering
  */
-
-export interface StepCompletion {
-  stepId: string;
-  label: string;
-  kind: 'station' | 'cardio';
-  lapTimeSeconds: number;
-  reps?: number;
-  distance?: number;
-}
 
 /**
  * Calculate individual step lap times.

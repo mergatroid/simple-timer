@@ -1,7 +1,6 @@
-import { WorkoutConfig, PresetId, EffortScale, PairingRule, StationId, CardioType } from './types';
+import { WorkoutConfig, PresetId, EffortScale, PairingRule, StationId } from './types';
 import { PRESETS, PRESET_STATION_COUNTS } from './presets';
 import { STATION_IDS } from './stations';
-import { CARDIO_TYPES } from './cardio';
 
 /**
  * WorkoutConfigManager is a deep module that consolidates all configuration management logic.

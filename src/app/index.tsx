@@ -16,8 +16,9 @@ import { Spacing } from '@/constants/theme';
 import { CARDIO_DEFS, CARDIO_TYPES } from '@/domain/cardio';
 import { STATION_DEFS, STATION_IDS } from '@/domain/stations';
 import { setCurrentWorkout } from '@/domain/workout-store';
+import { applyScale } from '@/domain/effort-scale';
 import { useTheme } from '@/hooks/use-theme';
-import { useWodWorkout } from '@/hooks/use-wod-workout';
+import { useWorkoutConfig } from '@/hooks/use-workout-config';
 
 export default function ConfigureScreen() {
   const theme = useTheme();
@@ -25,16 +26,12 @@ export default function ConfigureScreen() {
     config,
     isValid,
     validationError,
-    applyPreset,
+    updateConfig,
     toggleStation,
-    toggleCardio,
-    setEffortScale,
-    setPairingRule,
-    setRunDistanceMode,
-    setRunDistanceFixed,
-    setRunDistanceRange,
+    toggleCardioType,
+    applyPreset,
     generate,
-  } = useWodWorkout();
+  } = useWorkoutConfig();
 
 
   const handleGenerate = () => {
@@ -90,17 +87,17 @@ export default function ConfigureScreen() {
             <PresetChip
               label="Full"
               isSelected={config.effortScale === 'full'}
-              onPress={() => setEffortScale('full')}
+              onPress={() => updateConfig('effortScale', 'full')}
             />
             <PresetChip
               label="1/2"
               isSelected={config.effortScale === 'half'}
-              onPress={() => setEffortScale('half')}
+              onPress={() => updateConfig('effortScale', 'half')}
             />
             <PresetChip
               label="1/4"
               isSelected={config.effortScale === 'quarter'}
-              onPress={() => setEffortScale('quarter')}
+              onPress={() => updateConfig('effortScale', 'quarter')}
             />
           </View>
         </View>
@@ -117,8 +114,7 @@ export default function ConfigureScreen() {
           <View style={styles.stationGrid}>
             {STATION_IDS.map((stationId) => {
               const def = STATION_DEFS[stationId];
-              const multiplier = config.effortScale === 'full' ? 1.0 : config.effortScale === 'half' ? 0.5 : 0.25;
-              const scaledValue = Math.ceil((def.fullValue * multiplier) / 5) * 5;
+              const scaledValue = applyScale(def.fullValue, config.effortScale);
               const metricDisplay = `${scaledValue}${def.unit}`;
               return (
                 <StationCard
@@ -146,7 +142,7 @@ export default function ConfigureScreen() {
                   key={type}
                   label={def.label}
                   isSelected={config.selectedCardioTypes.includes(type)}
-                  onPress={() => toggleCardio(type)}
+                  onPress={() => toggleCardioType(type)}
                 />
               );
             })}
@@ -159,7 +155,7 @@ export default function ConfigureScreen() {
           </ThemedText>
           <View style={styles.segmentControl}>
             <Pressable
-              onPress={() => setRunDistanceMode('fixed')}
+              onPress={() => updateConfig('runDistanceMode', 'fixed')}
               style={[
                 styles.segmentButton,
                 styles.segmentButtonLeft,
@@ -173,7 +169,7 @@ export default function ConfigureScreen() {
               </ThemedText>
             </Pressable>
             <Pressable
-              onPress={() => setRunDistanceMode('range')}
+              onPress={() => updateConfig('runDistanceMode', 'range')}
               style={[
                 styles.segmentButton,
                 styles.segmentButtonRight,
@@ -194,7 +190,7 @@ export default function ConfigureScreen() {
               min={100}
               max={2000}
               step={100}
-              onChange={setRunDistanceFixed}
+              onChange={(val) => updateConfig('runDistanceFixed', val)}
             />
           ) : (
             <>
@@ -204,7 +200,7 @@ export default function ConfigureScreen() {
                 min={100}
                 max={config.runDistanceMax}
                 step={100}
-                onChange={(min) => setRunDistanceRange(min, config.runDistanceMax)}
+                onChange={(min) => updateConfig('runDistanceMin', min)}
               />
               <DistancePicker
                 label="Max Distance"
@@ -212,7 +208,7 @@ export default function ConfigureScreen() {
                 min={config.runDistanceMin}
                 max={2000}
                 step={100}
-                onChange={(max) => setRunDistanceRange(config.runDistanceMin, max)}
+                onChange={(max) => updateConfig('runDistanceMax', max)}
               />
             </>
           )}
@@ -226,17 +222,17 @@ export default function ConfigureScreen() {
             <PresetChip
               label="Before"
               isSelected={config.pairingRule === 'before'}
-              onPress={() => setPairingRule('before')}
+              onPress={() => updateConfig('pairingRule', 'before')}
             />
             <PresetChip
               label="After"
               isSelected={config.pairingRule === 'after'}
-              onPress={() => setPairingRule('after')}
+              onPress={() => updateConfig('pairingRule', 'after')}
             />
             <PresetChip
               label="Random"
               isSelected={config.pairingRule === 'random'}
-              onPress={() => setPairingRule('random')}
+              onPress={() => updateConfig('pairingRule', 'random')}
             />
           </View>
         </View>
