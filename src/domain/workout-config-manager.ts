@@ -126,15 +126,19 @@ export class WorkoutConfigManager {
    */
   toggleStation(stationId: StationId): void {
     const idx = this._config.selectedStations.indexOf(stationId);
-    if (idx > -1) {
-      this._config.selectedStations.splice(idx, 1);
-    } else {
-      this._config.selectedStations.push(stationId);
-    }
-    this.validate();
-    if (!this.isValid) {
+    const newStations = idx > -1
+      ? this._config.selectedStations.filter(s => s !== stationId)
+      : [...this._config.selectedStations, stationId];
+
+    // Test new state before committing
+    const testConfig = { ...this._config, selectedStations: newStations };
+    const testValid = this.validateConfig(testConfig);
+
+    if (!testValid) {
       throw new Error(`Config validation failed: ${this._validationError}`);
     }
+
+    this._config.selectedStations = newStations;
   }
 
   /**
@@ -142,15 +146,19 @@ export class WorkoutConfigManager {
    */
   toggleCardioType(cardioType: CardioType): void {
     const idx = this._config.selectedCardioTypes.indexOf(cardioType);
-    if (idx > -1) {
-      this._config.selectedCardioTypes.splice(idx, 1);
-    } else {
-      this._config.selectedCardioTypes.push(cardioType);
-    }
-    this.validate();
-    if (!this.isValid) {
+    const newCardioTypes = idx > -1
+      ? this._config.selectedCardioTypes.filter(c => c !== cardioType)
+      : [...this._config.selectedCardioTypes, cardioType];
+
+    // Test new state before committing
+    const testConfig = { ...this._config, selectedCardioTypes: newCardioTypes };
+    const testValid = this.validateConfig(testConfig);
+
+    if (!testValid) {
       throw new Error(`Config validation failed: ${this._validationError}`);
     }
+
+    this._config.selectedCardioTypes = newCardioTypes;
   }
 
   /**
@@ -195,26 +203,25 @@ export class WorkoutConfigManager {
   }
 
   /**
-   * Check if current configuration is valid.
-   * Sets validationError. Returns true if valid.
+   * Check if a config is valid. Pure function for testing.
    */
-  private validate(): boolean {
+  private validateConfig(config: WorkoutConfig): boolean {
     // Must have at least 3 stations
-    if (this._config.selectedStations.length < 3) {
+    if (config.selectedStations.length < 3) {
       this._validationError = 'Must select at least 3 stations';
       return false;
     }
 
     // Must have at least 1 cardio type
-    if (this._config.selectedCardioTypes.length === 0) {
+    if (config.selectedCardioTypes.length === 0) {
       this._validationError = 'Must select at least 1 cardio type';
       return false;
     }
 
     // If using range mode, min < max
     if (
-      this._config.runDistanceMode === 'range' &&
-      this._config.runDistanceMin >= this._config.runDistanceMax
+      config.runDistanceMode === 'range' &&
+      config.runDistanceMin >= config.runDistanceMax
     ) {
       this._validationError = 'Distance range: min must be less than max';
       return false;
@@ -222,5 +229,13 @@ export class WorkoutConfigManager {
 
     this._validationError = null;
     return true;
+  }
+
+  /**
+   * Check if current configuration is valid.
+   * Sets validationError. Returns true if valid.
+   */
+  private validate(): boolean {
+    return this.validateConfig(this._config);
   }
 }
