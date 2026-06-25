@@ -1,7 +1,9 @@
+/* eslint-disable react-hooks/refs, react-hooks/set-state-in-effect */
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, View, Share } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View, Share, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useRef, useEffect } from 'react';
+import { Share2 } from 'lucide-react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { WorkoutStepDisplay } from '@/components/workout-step-display';
@@ -12,15 +14,19 @@ import { useTheme } from '@/hooks/use-theme';
 import { useWorkoutPlayer } from '@/hooks/use-workout-player';
 import { useWorkoutTimer } from '@/hooks/use-workout-timer';
 import { formatTime } from '@/utils/workout-timer';
-import { formatWorkoutForSharing } from '@/utils/share-workout';
+import { formatWorkoutForSharing, formatGeneratedWorkoutForSharing } from '@/utils/share-workout';
 import { WorkoutResult } from '@/domain/types';
 
 export default function WorkoutScreen() {
   const theme = useTheme();
   const workout = getCurrentWorkout();
   const [workoutResult, setWorkoutResult] = useState<WorkoutResult | null>(null);
+  const [isAdvancing, setIsAdvancing] = useState(false);
   const stepTimesRef = useRef<{ stepId: string; timestamp: number }[]>([]);
+  const stepStartTimesRef = useRef<number[]>([]);
   const workoutStartTimeRef = useRef<number>(0);
+  const buttonScaleRef = useRef(new Animated.Value(1)).current;
+  const currentIndexRef = useRef(0);
 
   // Initialize hooks unconditionally
   const workoutPlayer = useWorkoutPlayer(workout || { steps: [], totalSteps: 0, id: '', generatedAt: 0 });
@@ -28,7 +34,34 @@ export default function WorkoutScreen() {
   const timer = useWorkoutTimer();
 
   const { currentStep, isFinished, progress, currentIndex, advance } = workoutPlayer;
+  const { isRunning } = timer;
 
+  // Track current index in ref for reliable onClick access
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  // Reset timer when advancing to a new step
+  useEffect(() => {
+    setIsAdvancing(false);
+    timer.reset();
+  }, [currentIndex, timer]);
+
+  // Animate button when state changes
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(buttonScaleRef, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(buttonScaleRef, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isRunning, currentIndex, buttonScaleRef]);
 
   // Calculate results when workout finishes
   useEffect(() => {
@@ -47,15 +80,10 @@ export default function WorkoutScreen() {
         let lapTimeSeconds = 0;
 
         if (completion) {
-          if (index === 0) {
-            // First step: time from start
-            lapTimeSeconds = Math.round((completion.timestamp - workoutStartTimeRef.current) / 1000);
-          } else {
-            // Subsequent steps: time from previous step
-            const prevCompletion = stepTimesRef.current[index - 1];
-            if (prevCompletion) {
-              lapTimeSeconds = Math.round((completion.timestamp - prevCompletion.timestamp) / 1000);
-            }
+          const stepStartTime = stepStartTimesRef.current[index];
+          if (stepStartTime) {
+            // Use the recorded start time for this step
+            lapTimeSeconds = Math.round((completion.timestamp - stepStartTime) / 1000);
           }
         }
 
@@ -110,16 +138,28 @@ export default function WorkoutScreen() {
     }
   };
 
+  const handleShareWorkout = async () => {
+    if (!workout) return;
+    try {
+      await Share.share({
+        message: formatGeneratedWorkoutForSharing(workout),
+        title: 'WODFather Workout',
+      });
+    } catch (error) {
+      console.error('Share failed:', error);
+    }
+  };
+
   return (
     <View style={styles.screenContainer}>
       <SafeAreaView style={[styles.safeAreaInner, { overflow: 'visible' }]} edges={['top']}>
         {currentStep && !isFinished && (
           <View style={[styles.stickyTimerContainer, { backgroundColor: theme.backgroundElement }]}>
             <ThemedText type="small" themeColor="textSecondary" style={styles.timerLabel}>
-              Time Remaining
+              Time Elapsed
             </ThemedText>
             <ThemedText type="title" style={styles.timerDisplay}>
-              {formatTime(timer.remainingSeconds)}
+              {formatTime(timer.elapsedSeconds)}
             </ThemedText>
           </View>
         )}
@@ -171,16 +211,22 @@ export default function WorkoutScreen() {
                     >
                       SPLITS
                     </ThemedText>
-                    {workoutResult.completions.map((completion) => (
-                      <View key={completion.stepId} style={styles.splitRow}>
-                        <ThemedText type="small" themeColor="text">
-                          {completion.label}
-                        </ThemedText>
-                        <ThemedText type="small" themeColor="textSecondary">
-                          {formatTime(completion.lapTimeSeconds)}
-                        </ThemedText>
-                      </View>
-                    ))}
+                    {workoutResult.completions.map((completion) => {
+                      const metric = completion.reps ? `${completion.reps} reps` : completion.distance ? `${completion.distance}m` : '';
+                      return (
+                        <View key={completion.stepId} style={styles.splitRow}>
+                          <ThemedText type="small" themeColor="text" style={styles.splitCol1}>
+                            {completion.label}
+                          </ThemedText>
+                          <ThemedText type="small" themeColor="text" style={styles.splitCol2}>
+                            {metric}
+                          </ThemedText>
+                          <ThemedText type="small" themeColor="textSecondary" style={styles.splitCol3}>
+                            {formatTime(completion.lapTimeSeconds)}
+                          </ThemedText>
+                        </View>
+                      );
+                    })}
                   </>
                 )}
               </View>
@@ -234,9 +280,13 @@ export default function WorkoutScreen() {
                 >
                   {/* Progress Header */}
                 <View style={styles.header}>
-                <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
-                  Step {currentIndex + 1} of {workout.totalSteps}
-                </ThemedText>
+                  <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center', flex: 1 }}>
+                    Step {currentIndex + 1} of {workout.totalSteps}
+                  </ThemedText>
+                  <Pressable onPress={handleShareWorkout} style={styles.shareIconButton}>
+                    <Share2 size={20} color={theme.text} />
+                  </Pressable>
+                </View>
                 <View
                   style={[
                     styles.progressBar,
@@ -255,47 +305,76 @@ export default function WorkoutScreen() {
                     ]}
                   />
                 </View>
-              </View>
 
               {/* Current Step Display */}
               <WorkoutStepDisplay step={currentStep} variant="current" />
 
               {/* Control Button */}
-              <Pressable
-                onPress={() => {
-                  if (timer.remainingSeconds === 0) {
-                    // Not started yet - start the timer
-                    timer.start();
-                  } else {
-                    // Record completion time before advancing
-                    const now = Date.now();
-                    // Set start time on first completion
-                    if (!workoutStartTimeRef.current) {
-                      workoutStartTimeRef.current = now;
-                    }
-                    stepTimesRef.current[currentIndex] = {
-                      stepId: currentStep.id,
-                      timestamp: now,
-                    };
-                    // Already running - advance to next station
-                    advance();
-                  }
-                }}
-                style={[
-                  styles.nextButton,
-                  {
-                    backgroundColor: theme.accent,
-                  },
-                ]}
-              >
-                <ThemedText type="smallBold" themeColor="accentText">
-                  {timer.remainingSeconds === 0
-                    ? 'START'
-                    : currentIndex === workout.totalSteps - 1
-                      ? 'FINISH'
-                      : 'NEXT'}
-                </ThemedText>
-              </Pressable>
+              {(() => {
+                const isStart = !isRunning;
+                const isFinish = isRunning && currentIndex === workout.totalSteps - 1;
+                const isInverted = isStart || isFinish;
+
+                return (
+                  <Animated.View style={{ transform: [{ scale: buttonScaleRef }] }}>
+                    <Pressable
+                      onPress={() => {
+                        if (isAdvancing) return; // Prevent double-clicks
+
+                        if (!isRunning) {
+                          // Not started yet - start the timer
+                          const now = Date.now();
+                          const stepIdx = currentIndexRef.current;
+
+                          if (!workoutStartTimeRef.current) {
+                            workoutStartTimeRef.current = now;
+                          }
+                          stepStartTimesRef.current[stepIdx] = now;
+                          timer.start();
+                        } else {
+                          // Already running - record completion time and advance
+                          const now = Date.now();
+                          const stepIdx = currentIndexRef.current;
+
+                          if (currentStep) {
+                            stepTimesRef.current[stepIdx] = {
+                              stepId: currentStep.id,
+                              timestamp: now,
+                            };
+                          }
+
+                          // Prevent further clicks until state updates
+                          setIsAdvancing(true);
+                          advance();
+                        }
+                      }}
+                      disabled={isAdvancing}
+                      style={[
+                        styles.nextButton,
+                        {
+                          backgroundColor: isAdvancing ? theme.backgroundElement : (isInverted ? theme.backgroundElement : theme.accent),
+                          opacity: isAdvancing ? 0.5 : 1,
+                          ...(isInverted && !isAdvancing && {
+                            borderWidth: 2,
+                            borderColor: theme.accent,
+                          }),
+                        },
+                      ]}
+                    >
+                      <ThemedText
+                        type="smallBold"
+                        style={{ color: isInverted ? theme.accent : theme.accentText }}
+                      >
+                        {isStart
+                          ? 'START'
+                          : isFinish
+                            ? 'FINISH'
+                            : 'NEXT'}
+                      </ThemedText>
+                    </Pressable>
+                  </Animated.View>
+                );
+              })()}
 
               {workout.steps.length > 0 && (
                 <View style={styles.upcomingSection}>
@@ -359,6 +438,13 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: Spacing.one,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  shareIconButton: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
   },
   progressBar: {
     height: 4,
@@ -431,13 +517,13 @@ const styles = StyleSheet.create({
   resultsSummary: {
     width: '100%',
     marginBottom: Spacing.six,
-    gap: Spacing.four,
+    gap: Spacing.one,
   },
   resultRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.two,
+    paddingVertical: Spacing.one,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.1)',
   },
@@ -447,9 +533,22 @@ const styles = StyleSheet.create({
   },
   splitRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing.one,
+    paddingVertical: 4,
+  },
+  splitCol1: {
+    flex: 1,
+    fontFamily: 'Courier New',
+  },
+  splitCol2: {
+    width: 80,
+    textAlign: 'right',
+    fontFamily: 'Courier New',
+  },
+  splitCol3: {
+    width: 60,
+    textAlign: 'right',
+    fontFamily: 'Courier New',
   },
   buttonRow: {
     flexDirection: 'row',
