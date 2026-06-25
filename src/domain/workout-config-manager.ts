@@ -30,6 +30,7 @@ export class WorkoutConfigManager {
       runDistanceFixed: 400,
       runDistanceMin: 200,
       runDistanceMax: 800,
+      preset: undefined,
       ...initialConfig,
     };
 
@@ -189,6 +190,7 @@ export class WorkoutConfigManager {
       ...this._config,
       ...preset.config,
       selectedStations: STATION_IDS.slice(0, stationCount) as StationId[],
+      preset: presetId,
     };
 
     this.validate();
