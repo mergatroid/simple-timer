@@ -208,3 +208,178 @@ Good test targets:
 - `useWodWorkout()` hook (state updates, validation rules)
 
 Refer to https://docs.expo.dev/develop/unit-testing/ for Expo Jest setup.
+
+---
+
+## 🎯 Complete User Workflow (Critical Reference)
+
+### Home Screen → Workout Screen → Results Screen
+
+```
+1. HOME SCREEN (src/app/index.tsx)
+   ├─ Loads with INTERMEDIATE preset pre-selected
+   │  ├─ 5 stations selected
+   │  ├─ "run" cardio type selected
+   │  ├─ effortScale: 'half'
+   │  └─ runDistanceFixed: 400m
+   │
+   ├─ User can customize:
+   │  ├─ Difficulty preset (Beginner/Intermediate/Advanced)
+   │  ├─ Individual stations (toggle on/off)
+   │  ├─ Cardio types (toggle on/off)
+   │  ├─ Metrics scale (Full/1/2/1/4)
+   │  ├─ Run distance (Fixed or Range)
+   │  └─ Pairing rule (Before/After/Random)
+   │
+   └─ GENERATE WORKOUT button
+      └─ Active when: 3+ stations AND 1+ cardio type selected
+
+2. WORKOUT SCREEN (src/app/workout.tsx)
+   ├─ Displays current step with metrics
+   ├─ Shows progress: "Step X of Y"
+   ├─ TIMER DISPLAY (sticky at top)
+   │  └─ Shows time elapsed in MM:SS format
+   │
+   └─ Button workflow (CRITICAL):
+      ├─ Initial state: isRunning = false
+      │  ├─ Button label: "START"
+      │  └─ Timer display: 0:00
+      │
+      ├─ After START pressed:
+      │  ├─ isRunning = true
+      │  ├─ Button label: "NEXT" (or "FINISH" if last step)
+      │  ├─ Timer: increments 0:01, 0:02, 0:03... each second
+      │  └─ workoutStartTime recorded
+      │
+      ├─ After NEXT pressed:
+      │  ├─ isRunning = false
+      │  ├─ Button label: "START"
+      │  ├─ Timer resets: 0:00
+      │  ├─ currentStepIndex increments
+      │  ├─ Step completion recorded
+      │  └─ elapsedSeconds reset to 0
+      │
+      └─ After FINISH pressed (on last step):
+         ├─ isFinished = true
+         ├─ Results calculated
+         └─ Navigate to results screen
+
+3. RESULTS SCREEN
+   ├─ Display total time
+   ├─ Display split times for each step
+   ├─ Share results option
+   └─ "NEW WORKOUT" button
+      └─ Navigate back to HOME SCREEN
+
+```
+
+---
+
+## 🏗️ Four Deep Modules Architecture
+
+### Module 1: WorkoutPlayback (State Machine)
+**File**: `src/domain/workout-playback.ts`
+
+**Responsibility**: Owns complete workout execution state and timing
+
+**Critical Methods**:
+- `startStep()` - Starts timer, sets isRunning=true
+- `advanceStep()` - Records completion, resets timer, moves to next step
+- `finishWorkout()` - Completes entire workout, calculates results
+
+**State Property**: Immutable snapshot with:
+- `currentStepIndex` - Which step we're on
+- `isRunning` - Is timer active?
+- `isFinished` - Is workout complete?
+- `elapsedSeconds` - Time elapsed for current step
+- `workoutResult` - Final results (null until finished)
+
+**DO NOT**:
+- ❌ Call methods that throw errors - they now fail silently
+- ❌ Assume isRunning stays true - it resets on advanceStep()
+- ❌ Trust elapsedSeconds between renders - use state snapshot
+
+### Module 2: WorkoutConfigManager (Configuration)
+**File**: `src/domain/workout-config-manager.ts`
+
+**Responsibility**: Manages all configuration state with validation
+
+**Critical Behavior**:
+- Initializes with INTERMEDIATE preset (5 stations, 'run' cardio)
+- Validates: 3+ stations AND 1+ cardio type required
+- Invalid operations silently ignored (no thrown errors)
+- Presets always set cardio type to 'run'
+
+**DO NOT**:
+- ❌ Expect errors thrown - operations fail silently
+- ❌ Assume state persists after invalid toggle - it doesn't
+- ❌ Forget that toggles validate BEFORE applying
+
+### Module 3: ResultCalculator (Pure Functions)
+**File**: `src/domain/result-calculator.ts`
+
+**Functions**:
+- `calculateLapTimes()` - Computes split time for each step
+- `aggregateMetrics()` - Sums reps and distances
+- `finalizeResult()` - Packages results for display
+
+**DO NOT**:
+- ❌ Call these from component render - use in playback only
+- ❌ Forget they're pure - no side effects
+
+### Module 4: EffortScale (Utility)
+**File**: `src/domain/effort-scale.ts`
+
+**Functions**:
+- `applyScale(value, scale)` - Returns effort-scaled value
+
+**Scaling**:
+- 'full' (1.0x) - 100% of metrics
+- 'half' (0.5x) - 50% of metrics
+- 'quarter' (0.25x) - 25% of metrics
+- Rounding: Math.ceil((value * multiplier) / 5) * 5 (round to nearest 5)
+
+---
+
+## ⚠️ Common Pitfalls (AVOID THESE)
+
+### 1. Timer Not Updating
+**Problem**: Timer shows 0:00 and doesn't increment
+**Cause**: Component not re-rendering every second
+**Fix**: Use `setTick(prev => prev + 1)` in 1-second interval AND in button press handler
+
+### 2. Button Not Responding
+**Problem**: User clicks START, button stays START, timer doesn't start
+**Cause**: Component doesn't re-render after button press
+**Fix**: Must call `setTick()` in handleButtonPress to force immediate re-render
+
+### 3. Config Corruption on Invalid Toggle
+**Problem**: User tries to remove only cardio type, state gets corrupted
+**Cause**: Mutation before validation
+**Fix**: Validate BEFORE modifying, only update if validation passes
+
+### 4. Shallow Config Snapshots
+**Problem**: Array selections not updating in UI
+**Cause**: Config getter returns shallow spread
+**Fix**: Must spread arrays too: `{ ...config, selectedStations: [...stations], ... }`
+
+### 5. Validation Errors Silently Breaking
+**Problem**: Silent errors mean app appears to do nothing
+**Solution**: This is intentional - operations that would make config invalid are simply ignored
+
+---
+
+## 🔧 For Next Session: Quick Checklist
+
+Before making changes, verify:
+- [ ] Start `npm run web` and test the FULL workflow (Home → Generate → Play all steps → Results)
+- [ ] Timer counts up from 0:00 when START pressed
+- [ ] Button changes to NEXT immediately when pressed
+- [ ] NEXT resets timer to 0:00
+- [ ] On last step, button shows FINISH
+- [ ] FINISH shows results with split times
+- [ ] "NEW WORKOUT" button goes back home
+- [ ] Linting: `npm run lint` = 0 errors
+- [ ] TypeScript: `npx tsc --noEmit` = 0 errors
+
+If ANY of the above fail, do NOT proceed with feature changes - fix the broken workflow first.
