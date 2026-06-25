@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { WorkoutPlayback } from '../workout-playback';
 import { Workout, WorkoutStep } from '../types';
 

@@ -27,7 +27,7 @@ export class WorkoutPlayback {
   private workoutResult: WorkoutResult | null = null;
   private workoutStartTime: number | null = null;
   private stepCompletionTimes: Map<number, number> = new Map(); // step index -> completion timestamp
-  private timerIntervalId: NodeJS.Timeout | null = null;
+  private timerIntervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor(private workout: Workout) {
     if (!workout || workout.steps.length === 0) {
@@ -181,9 +181,9 @@ export class WorkoutPlayback {
         // First step: time from workout start
         // Subsequent steps: time from previous step completion
         const previousTime =
-          index === 0 ? this.workoutStartTime : this.stepCompletionTimes.get(index - 1);
+          index === 0 ? this.workoutStartTime : (this.stepCompletionTimes.get(index - 1) ?? this.workoutStartTime);
 
-        if (previousTime !== undefined) {
+        if (previousTime !== null) {
           lapTimeSeconds = Math.round((completionTime - previousTime) / 1000);
         }
       }

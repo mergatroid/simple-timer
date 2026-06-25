@@ -72,7 +72,7 @@ export function WorkoutStepDisplay({ step, variant }: WorkoutStepDisplayProps) {
       <ThemedText type="subtitle" themeColor="text" style={styles.upcomingLabel}>
         {step.label}
       </ThemedText>
-      <ThemedText type="body" themeColor="text" style={styles.upcomingValue}>
+      <ThemedText type="default" themeColor="text" style={styles.upcomingValue}>
         {step.displayValue}
       </ThemedText>
     </ThemedView>

@@ -20,7 +20,7 @@ export default function WorkoutScreen() {
   const workout = getCurrentWorkout();
   const [playback, setPlayback] = useState<WorkoutPlayback | null>(null);
   const buttonScaleRef = useRef(new Animated.Value(1));
-  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Initialize playback state machine on mount
   useEffect(() => {

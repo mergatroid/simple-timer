@@ -1,4 +1,4 @@
-import { WorkoutConfig, PresetId, EffortScale, PairingRule, StationId } from './types';
+import { WorkoutConfig, PresetId, EffortScale, PairingRule, StationId, CardioType } from './types';
 import { PRESETS, PRESET_STATION_COUNTS } from './presets';
 import { STATION_IDS } from './stations';
 
@@ -163,14 +163,16 @@ export class WorkoutConfigManager {
       throw new Error(`Unknown preset: ${presetId}`);
     }
 
-    // Get recommended station count for this preset
-    const stationCount = PRESET_STATION_COUNTS[presetId];
+    // Get recommended station count for this preset (random between min and max)
+    const [minStations, maxStations] = PRESET_STATION_COUNTS[presetId];
+    const stationCount = Math.floor(Math.random() * (maxStations - minStations + 1)) + minStations;
 
-    // Select first N stations
-    this._config.selectedStations = STATION_IDS.slice(0, stationCount) as StationId[];
-    this._config.effortScale = preset.effortScale;
-    this._config.selectedCardioTypes = [preset.cardioType];
-    this._config.pairingRule = preset.pairingRule;
+    // Apply preset config and select N stations
+    this._config = {
+      ...this._config,
+      ...preset.config,
+      selectedStations: STATION_IDS.slice(0, stationCount) as StationId[],
+    };
 
     this.validate();
   }
