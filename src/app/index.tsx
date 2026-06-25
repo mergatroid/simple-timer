@@ -6,7 +6,6 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Dumbbell } from 'lucide-react-native';
 
 import { CardioChip } from '@/components/cardio-chip';
 import { DistancePicker } from '@/components/distance-picker';
@@ -48,10 +47,12 @@ export default function ConfigureScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.titleContainer}>
-          <Dumbbell size={32} color={theme.text} style={styles.titleIcon} />
+        <View style={styles.titleWrapper}>
           <ThemedText type="title" style={styles.title}>
-            wodfish
+            wod
+          </ThemedText>
+          <ThemedText type="title" style={[styles.title, { color: theme.accent }]}>
+            fish
           </ThemedText>
         </View>
         <ThemedText themeColor="textSecondary" style={styles.subtitle}>
@@ -280,18 +281,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     paddingBottom: Spacing.five,
   },
-  titleContainer: {
+  titleWrapper: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Spacing.three,
-    marginBottom: Spacing.one,
-  },
-  titleIcon: {
-    marginRight: Spacing.two,
   },
   title: {
-    marginTop: 0,
-    marginBottom: 0,
+    marginTop: Spacing.three,
+    marginBottom: Spacing.one,
   },
   subtitle: {
     marginBottom: Spacing.four,
