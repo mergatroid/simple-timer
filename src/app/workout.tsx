@@ -23,7 +23,6 @@ export default function WorkoutScreen() {
   const [workoutResult, setWorkoutResult] = useState<WorkoutResult | null>(null);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const stepTimesRef = useRef<{ stepId: string; timestamp: number }[]>([]);
-  const stepStartTimesRef = useRef<number[]>([]);
   const workoutStartTimeRef = useRef<number>(0);
   const buttonScaleRef = useRef(new Animated.Value(1)).current;
   const currentIndexRef = useRef(0);
@@ -41,10 +40,9 @@ export default function WorkoutScreen() {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
 
-  // Reset timer when advancing to a new step
+  // Clear advancing flag when step changes
   useEffect(() => {
     setIsAdvancing(false);
-    timer.reset();
   }, [currentIndex]);
 
   // Animate button when state changes
@@ -80,10 +78,14 @@ export default function WorkoutScreen() {
         let lapTimeSeconds = 0;
 
         if (completion) {
-          const stepStartTime = stepStartTimesRef.current[index];
-          if (stepStartTime) {
-            // Use the recorded start time for this step
-            lapTimeSeconds = Math.round((completion.timestamp - stepStartTime) / 1000);
+          // For first step, calculate from workout start
+          // For subsequent steps, calculate from previous step's completion
+          const previousCompletion = index === 0
+            ? workoutStartTimeRef.current
+            : stepTimesRef.current[index - 1]?.timestamp;
+
+          if (previousCompletion) {
+            lapTimeSeconds = Math.round((completion.timestamp - previousCompletion) / 1000);
           }
         }
 
@@ -324,12 +326,10 @@ export default function WorkoutScreen() {
                         if (!isRunning) {
                           // Not started yet - start the timer
                           const now = Date.now();
-                          const stepIdx = currentIndexRef.current;
 
                           if (!workoutStartTimeRef.current) {
                             workoutStartTimeRef.current = now;
                           }
-                          stepStartTimesRef.current[stepIdx] = now;
                           timer.start();
                         } else {
                           // Already running - record completion time and advance
