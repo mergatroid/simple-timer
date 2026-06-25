@@ -105,12 +105,24 @@ export default function WorkoutScreen() {
 
   const handleButtonPress = () => {
     try {
+      console.log('Button pressed. Current state:', {
+        isRunning: playback?.state.isRunning,
+        currentStep: playback?.state.currentStepIndex,
+      });
+
+      if (!playback) {
+        console.error('Playback is null');
+        return;
+      }
+
       // Check current playback state, not stale closure variable
       if (!playback.state.isRunning) {
-        // Start the current step
+        console.log('Starting step...');
         playback.startStep();
+        console.log('After startStep:', { isRunning: playback.state.isRunning });
       } else {
         // Advance to next step (or finish if on last)
+        console.log('Advancing step...');
         if (playback.isOnLastStep()) {
           playback.finishWorkout();
         } else {
