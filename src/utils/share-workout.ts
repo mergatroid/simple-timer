@@ -3,7 +3,7 @@ import { formatTime } from './workout-timer';
 
 export function formatWorkoutForSharing(workoutResult: WorkoutResult): string {
   const lines: string[] = [
-    'WODFather Workout Complete!',
+    'wodfish Workout Complete!',
     '',
     'Total Time: ' + formatTime(workoutResult.totalTimeSeconds),
   ];
@@ -30,14 +30,14 @@ export function formatWorkoutForSharing(workoutResult: WorkoutResult): string {
   }
 
   lines.push('');
-  lines.push('Generated with WODFather');
+  lines.push('Generated with wodfish');
 
   return lines.join('\n');
 }
 
 export function formatGeneratedWorkoutForSharing(workout: Workout): string {
   const lines: string[] = [
-    'WODFather Workout',
+    'wodfish Workout',
     '',
     'Exercises:',
   ];
@@ -50,7 +50,7 @@ export function formatGeneratedWorkoutForSharing(workout: Workout): string {
   lines.push('');
   lines.push('Ready to crush it!');
   lines.push('');
-  lines.push('Generated with WODFather');
+  lines.push('Generated with wodfish');
 
   return lines.join('\n');
 }

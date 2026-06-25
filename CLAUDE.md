@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**WODFather** (codebase: **glent**) is a Hyrox-focused workout generator for iOS, Android, and web. It generates randomized station-based workouts with configurable difficulty levels and cardio pairings, then plays back the workout step-by-step with audio alerts.
+**wodfish** (codebase: **glent**) is a Hyrox-focused workout generator for iOS, Android, and web. It generates randomized station-based workouts with configurable difficulty levels and cardio pairings, then plays back the workout step-by-step with audio alerts.
 
 Users can:
 - Choose difficulty presets (beginner/intermediate/advanced)

@@ -134,7 +134,7 @@ export default function WorkoutScreen() {
     try {
       await Share.share({
         message: formatWorkoutForSharing(workoutResult),
-        title: 'WODFather Workout Results',
+        title: 'wodfish Workout Results',
       });
     } catch (error) {
       console.error('Share failed:', error);
@@ -146,7 +146,7 @@ export default function WorkoutScreen() {
     try {
       await Share.share({
         message: formatGeneratedWorkoutForSharing(workout),
-        title: 'WODFather Workout',
+        title: 'wodfish Workout',
       });
     } catch (error) {
       console.error('Share failed:', error);

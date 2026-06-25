@@ -51,7 +51,7 @@ export default function ConfigureScreen() {
         <View style={styles.titleContainer}>
           <Dumbbell size={32} color={theme.text} style={styles.titleIcon} />
           <ThemedText type="title" style={styles.title}>
-            WODFather
+            wodfish
           </ThemedText>
         </View>
         <ThemedText themeColor="textSecondary" style={styles.subtitle}>
