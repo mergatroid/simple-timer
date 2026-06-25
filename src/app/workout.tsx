@@ -105,7 +105,8 @@ export default function WorkoutScreen() {
 
   const handleButtonPress = () => {
     try {
-      if (!isRunning) {
+      // Check current playback state, not stale closure variable
+      if (!playback.state.isRunning) {
         // Start the current step
         playback.startStep();
       } else {
