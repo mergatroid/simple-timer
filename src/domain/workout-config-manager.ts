@@ -33,7 +33,12 @@ export class WorkoutConfigManager {
       ...initialConfig,
     };
 
-    this.validate(); // Check initial state
+    // Apply intermediate preset by default for better UX (pre-selects stations and cardio)
+    if (!initialConfig?.selectedStations || initialConfig.selectedStations.length === 0) {
+      this.applyPreset('intermediate');
+    } else {
+      this.validate(); // Check initial state
+    }
   }
 
   /**
