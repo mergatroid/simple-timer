@@ -84,7 +84,7 @@ export default function ConfigureScreen() {
 
         <View style={styles.section}>
           <ThemedText type="smallBold" themeColor="textSecondary">
-            Effort Scale
+            Metrics Scale
           </ThemedText>
           <View style={styles.presetRow}>
             <PresetChip

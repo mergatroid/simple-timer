@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/refs, react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/refs, react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View, Share, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useWorkoutPlayer } from '@/hooks/use-workout-player';
 import { useWorkoutTimer } from '@/hooks/use-workout-timer';
 import { formatTime } from '@/utils/workout-timer';
-import { formatWorkoutForSharing, formatGeneratedWorkoutForSharing } from '@/utils/share-workout';
+import { formatWorkoutForSharing, formatGeneratedWorkoutForSharing, formatCompletionMetric } from '@/utils/share-workout';
 import { WorkoutResult } from '@/domain/types';
 
 export default function WorkoutScreen() {
@@ -35,17 +35,13 @@ export default function WorkoutScreen() {
   const { currentStep, isFinished, progress, currentIndex, advance } = workoutPlayer;
   const { isRunning } = timer;
 
-  // Track current index in ref for reliable onClick access
+  // Track current index and clear advancing flag when step changes
   useEffect(() => {
     currentIndexRef.current = currentIndex;
-  }, [currentIndex]);
-
-  // Clear advancing flag when step changes
-  useEffect(() => {
     setIsAdvancing(false);
   }, [currentIndex]);
 
-  // Animate button when state changes
+  // Animate button when state changes (buttonScaleRef is a persistent ref, not a dependency)
   useEffect(() => {
     Animated.sequence([
       Animated.timing(buttonScaleRef, {
@@ -59,7 +55,7 @@ export default function WorkoutScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [isRunning, currentIndex, buttonScaleRef]);
+  }, [isRunning, currentIndex]);
 
   // Calculate results when workout finishes
   useEffect(() => {
@@ -110,7 +106,7 @@ export default function WorkoutScreen() {
 
       setWorkoutResult(result);
     }
-  }, [isFinished, workoutResult, workout]);
+  }, [isFinished, workout, timer.elapsedSeconds]);
 
   if (!workout) {
     return (
@@ -215,7 +211,7 @@ export default function WorkoutScreen() {
                       SPLITS
                     </ThemedText>
                     {workoutResult.completions.map((completion) => {
-                      const metric = completion.reps ? `${completion.reps} reps` : completion.distance ? `${completion.distance}m` : '';
+                      const metric = formatCompletionMetric(completion);
                       return (
                         <View key={completion.stepId} style={styles.splitRow}>
                           <ThemedText type="small" themeColor="text" style={styles.splitCol1}>
@@ -359,7 +355,7 @@ export default function WorkoutScreen() {
                       style={[
                         styles.nextButton,
                         {
-                          backgroundColor: isAdvancing ? theme.backgroundElement : (isInverted ? theme.backgroundElement : theme.accent),
+                          backgroundColor: isAdvancing || isInverted ? theme.backgroundElement : theme.accent,
                           opacity: isAdvancing ? 0.5 : 1,
                           ...(isInverted && !isAdvancing && {
                             borderWidth: 2,
@@ -414,6 +410,8 @@ export default function WorkoutScreen() {
       </View>
   );
 }
+
+const MONOSPACE_FONT = 'Courier New';
 
 const styles = StyleSheet.create({
   screenContainer: {
@@ -545,17 +543,17 @@ const styles = StyleSheet.create({
   },
   splitCol1: {
     flex: 1,
-    fontFamily: 'Courier New',
+    fontFamily: MONOSPACE_FONT,
   },
   splitCol2: {
     width: 80,
     textAlign: 'right',
-    fontFamily: 'Courier New',
+    fontFamily: MONOSPACE_FONT,
   },
   splitCol3: {
     width: 60,
     textAlign: 'right',
-    fontFamily: 'Courier New',
+    fontFamily: MONOSPACE_FONT,
   },
   buttonRow: {
     flexDirection: 'row',

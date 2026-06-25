@@ -41,7 +41,6 @@ export function useWorkoutTimer({ onComplete }: UseWorkoutTimerOptions = {}) {
 
   return {
     elapsedSeconds,
-    remainingSeconds: elapsedSeconds,
     isRunning,
     start,
     pause,
