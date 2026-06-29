@@ -9,7 +9,7 @@ export type PresetDef = {
 export const PRESETS: Record<PresetId, PresetDef> = {
   beginner: {
     id: 'beginner',
-    label: 'Beginner',
+    label: 'Easy',
     config: {
       effortScale: 'quarter',
       runDistanceMode: 'fixed',
@@ -20,7 +20,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
   },
   intermediate: {
     id: 'intermediate',
-    label: 'Intermediate',
+    label: 'Medium',
     config: {
       effortScale: 'half',
       runDistanceMode: 'fixed',
@@ -31,7 +31,7 @@ export const PRESETS: Record<PresetId, PresetDef> = {
   },
   advanced: {
     id: 'advanced',
-    label: 'Advanced',
+    label: 'Hard',
     config: {
       effortScale: 'full',
       runDistanceMode: 'range',

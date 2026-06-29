@@ -43,7 +43,7 @@ export default function ConfigureScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.header}>
         <View style={styles.titleWrapper}>
           <ThemedText type="title" style={styles.title}>
             wod
@@ -55,24 +55,26 @@ export default function ConfigureScreen() {
         <ThemedText themeColor="textSecondary" style={styles.subtitle}>
           Hyrox Workout Generator
         </ThemedText>
+      </View>
 
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
           <ThemedText type="smallBold" themeColor="textSecondary">
             Difficulty
           </ThemedText>
           <View style={styles.presetRow}>
             <PresetChip
-              label="Beginner"
+              label="Easy"
               isSelected={config.preset === 'beginner'}
               onPress={() => applyPreset('beginner')}
             />
             <PresetChip
-              label="Intermediate"
+              label="Medium"
               isSelected={config.preset === 'intermediate'}
               onPress={() => applyPreset('intermediate')}
             />
             <PresetChip
-              label="Advanced"
+              label="Hard"
               isSelected={config.preset === 'advanced'}
               onPress={() => applyPreset('advanced')}
             />
@@ -273,6 +275,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  header: {
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.two,
+  },
   scrollContent: {
     paddingHorizontal: Spacing.three,
     paddingBottom: Spacing.five,
@@ -281,7 +288,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   title: {
-    marginTop: Spacing.three,
     marginBottom: Spacing.one,
   },
   subtitle: {

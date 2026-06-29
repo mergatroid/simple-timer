@@ -72,7 +72,8 @@ export default function WorkoutScreen() {
   }
 
   const state = playback.state;
-  const { currentStep, isFinished, progress, elapsedSeconds, isRunning, workoutResult } = state;
+  const { currentStep, isFinished, progress, isRunning, workoutResult } = state;
+  const totalElapsedSeconds = playback.totalElapsedSeconds;
 
   const handleEndWorkout = () => {
     clearCurrentWorkout();
@@ -133,7 +134,7 @@ export default function WorkoutScreen() {
               Time Elapsed
             </ThemedText>
             <ThemedText type="title" style={styles.timerDisplay}>
-              {formatTime(elapsedSeconds)}
+              {formatTime(totalElapsedSeconds)}
             </ThemedText>
           </View>
         )}

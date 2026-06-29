@@ -15,14 +15,6 @@ function randomPick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function buildMultiples(min: number, max: number, step: number): number[] {
-  const result: number[] = [];
-  for (let i = min; i <= max; i += step) {
-    result.push(i);
-  }
-  return result;
-}
-
 function applyEffortScale(value: number, scale: EffortScale): number {
   const multiplier = scale === 'full' ? 1.0 : scale === 'half' ? 0.5 : 0.25;
   return Math.ceil((value * multiplier) / 5) * 5;
@@ -71,8 +63,10 @@ export function generateWorkout(config: WorkoutConfig): Workout {
     if (config.runDistanceMode === 'fixed') {
       cardioDistance = config.runDistanceFixed;
     } else {
-      const multiples = buildMultiples(config.runDistanceMin, config.runDistanceMax, 100);
-      cardioDistance = randomPick(multiples);
+      const range = config.runDistanceMax - config.runDistanceMin;
+      const numSteps = Math.round(range / 100);
+      const randomStep = Math.floor(Math.random() * (numSteps + 1));
+      cardioDistance = config.runDistanceMin + randomStep * 100;
     }
 
     const cardioDef = CARDIO_DEFS[cardioType];

@@ -142,6 +142,17 @@ export class WorkoutPlayback {
   }
 
   /**
+   * Total elapsed time since workout started (in seconds).
+   * Used for display timer that shows overall progress.
+   */
+  get totalElapsedSeconds(): number {
+    if (this.workoutStartTime === null) {
+      return 0;
+    }
+    return Math.floor((Date.now() - this.workoutStartTime) / 1000);
+  }
+
+  /**
    * Cleanup: stop any running timer.
    */
   cleanup(): void {
@@ -165,7 +176,7 @@ export class WorkoutPlayback {
       throw new Error('Workout never started');
     }
 
-    const totalTimeSeconds = Math.floor(this.elapsedSeconds);
+    const totalTimeSeconds = Math.floor((Date.now() - this.workoutStartTime) / 1000);
     let totalReps = 0;
     let totalDistance = 0;
 

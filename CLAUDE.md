@@ -21,6 +21,31 @@ Key tech stack:
 - **React Native Reanimated** for animations
 - **expo-audio** for timer alerts
 
+## 🔄 Recent Architecture Changes (Session Summary)
+
+**Major refactor completed**: Implemented 4 deep modules for robust state management and timer handling.
+
+**What Changed**:
+1. **WorkoutPlayback** (new) — State machine owning all execution state, timer lifecycle, and results
+2. **WorkoutConfigManager** (new) — Configuration management with silent validation (replaces 14 callbacks)
+3. **EffortScale** (new) — Pure utility functions for effort scaling
+4. **ResultCalculator** (new) — Pure functions for result aggregation
+5. **Timer display** — Now shows **cumulative total** time (never resets between steps)
+6. **Button sequence** — Fixed to bookend pattern: START (once) → NEXT (all steps) → FINISH (last step)
+7. **Results calculation** — Now uses `workoutStartTime` to calculate actual total time
+
+**Why These Changes**:
+- **Testability**: Deep modules with small interfaces are easier to test without React
+- **Timer reliability**: Owned by WorkoutPlayback eliminates React dependency array bugs
+- **State machine**: Clear state transitions prevent invalid button/timer combinations
+- **Silent validation**: Invalid operations ignored (not thrown), preventing crashes
+- **Cumulative timer**: Shows user's actual workout duration from START to FINISH
+
+**Files Modified**:
+- New: `src/domain/workout-playback.ts`, `workout-config-manager.ts`, `effort-scale.ts`, `result-calculator.ts`
+- New: `src/hooks/use-workout-config.ts`
+- Updated: `src/app/index.tsx` (uses new WorkoutConfigManager), `src/app/workout.tsx` (uses WorkoutPlayback)
+
 ## Development Commands
 
 ### Installation and Setup
@@ -60,42 +85,99 @@ The app is a **workout generator and player** built with Expo Router file-based 
 ### Key Modules
 
 #### Domain Model (`src/domain/`)
-Defines the core data structures and business logic for workouts:
-- **`types.ts`** — Core types: `Workout`, `WorkoutStep`, `WorkoutConfig`, `StationId`, `CardioType`, `EffortScale`, `PairingRule`, `PresetId`
+Core data structures and types:
+- **`types.ts`** — Core types: `Workout`, `WorkoutStep`, `WorkoutConfig`, `WorkoutResult`, `StationId`, `CardioType`, `EffortScale`, `PairingRule`, `PresetId`
 - **`stations.ts`** — Station definitions (ski-erg, sled-push, rowing, etc.) with reps/distance data
 - **`cardio.ts`** — Cardio type definitions (run, bike, ski-erg, rower)
 - **`presets.ts`** — Difficulty presets (beginner/intermediate/advanced) with effort scales and station count ranges
 - **`generate-workout.ts`** — Creates randomized workout sequences from a `WorkoutConfig` using Fisher-Yates shuffle, effort scaling
 - **`workout-store.ts`** — Simple singleton for persisting current workout (used to pass workout from home → workout screen)
 
-#### Workout Configuration Hook (`src/hooks/use-wod-workout.ts`)
-Manages user-configurable workout settings:
-- State: `config` (stations, cardio types, effort, pairing rule, distance mode)
-- Methods: `applyPreset()`, `toggleStation()`, `toggleCardioType()`, `generateWorkout()`
-- Validation: Enforces minimum 3 stations, 1 cardio type
+#### Deep Module 1: WorkoutPlayback (State Machine) (`src/domain/workout-playback.ts`)
+**Owns**: Complete workout execution state, timer lifecycle, step progression, and results calculation.
 
-#### Workout Playback Hook (`src/hooks/use-workout-player.ts`)
-Tracks progress through a generated workout:
-- Manages: `currentIndex`, derives `currentStep`, `remainingSteps`, `isFinished`, `progress`
-- Methods: `advance()` (next step), `restart()`
+**Interface** (small, simple):
+- `constructor(workout: Workout)` — Initialize with a workout
+- `get state: WorkoutState` — Immutable snapshot of current state
+- `get totalElapsedSeconds: number` — Total elapsed time since workout start
+- `startStep(): void` — Begin current step, start timer
+- `advanceStep(): void` — Move to next step, auto-start timer for non-final steps
+- `finishWorkout(): void` — End workout, calculate results
+- `canAdvance(): boolean` — Guard check for advancing
+- `isOnLastStep(): boolean` — Check if on final step
+- `cleanup(): void` — Stop timer on unmount
 
-#### Timer Logic (`src/utils/workout-timer.ts`)
-Low-level countdown utilities:
-- `tickTimer()` — Decrements timer by 1 second
-- `parseDurationInput()` — Parses user input (supports "60" or "1:30" format)
-- `formatTime()` — Formats seconds to "mm:ss" display
-- `getTimerStatus()` — Determines timer state (idle/running/paused/finished)
+**Implementation** (deep, complex):
+- Timer lifecycle management (setInterval cleanup)
+- Step completion timestamp tracking
+- Result calculation (split times, totals)
+- State machine logic (prevents invalid transitions)
 
-#### Timer Hook (`src/hooks/use-workout-timer.ts`)
-Encapsulates timer state and control for a single step:
-- Manages: `durationSeconds`, `remainingSeconds`, `isRunning`, `hasStarted`
-- Returns: `status`, control methods (`start`, `pause`, `reset`), duration setters
-- Handles completion callback via `onCompleteRef` (prevents memory leaks)
-- 1-second interval-based countdown
+**Critical Details**:
+- Timer owned by WorkoutPlayback, not React — eliminates dependency array issues
+- `elapsedSeconds` is per-step; use `totalElapsedSeconds` for display timer
+- `advanceStep()` automatically starts next step's timer (keeps isRunning=true for bookend pattern)
+- Results calculated from `workoutStartTime` and completion timestamps
+
+#### Deep Module 2: WorkoutConfigManager (Configuration) (`src/domain/workout-config-manager.ts`)
+**Owns**: All configuration state, validation rules, and preset application.
+
+**Interface** (uniform, simple):
+- `constructor(initialConfig?: Partial<WorkoutConfig>)` — Initialize with optional config
+- `get config: WorkoutConfig` — Deep snapshot with spread arrays
+- `get validationError: string | null` — Current validation error
+- `get isValid: boolean` — Is config valid?
+- `updateConfig(field, value): void` — Update single field with validation
+- `toggleStation(stationId): void` — Toggle station (silently rejects if invalid)
+- `toggleCardioType(cardioType): void` — Toggle cardio type (silently rejects if invalid)
+- `applyPreset(presetId): void` — Apply preset, sets default 'run' cardio
+- `reset(): void` — Reset to defaults
+- `getValidationError(config): string | null` — Pure function for testing configs
+
+**Implementation** (deep, defensive):
+- Validation rules (3+ stations, 1+ cardio type)
+- Preset expansion logic
+- Silent failure pattern (invalid operations ignored, not thrown)
+- Deep array spreading for immutable snapshots
+
+**Critical Details**:
+- Initializes with INTERMEDIATE preset by default (5 stations, 'run' cardio)
+- `getValidationError()` is pure — used internally and for testing hypothetical configs
+- All toggles test before committing: won't allow operations that violate constraints
+
+#### Module 3: EffortScale (Utility) (`src/domain/effort-scale.ts`)
+Pure functions for effort scaling:
+- `getMultiplier(scale: EffortScale): number` — Returns multiplier (1.0, 0.5, 0.25)
+- `applyScale(value: number, scale: EffortScale): number` — Apply scale with rounding
+- `getScaleLabel(scale: EffortScale): string` — Human label for scale
+
+**Scaling rules**:
+- 'full' (1.0x) — 100% of metrics
+- 'half' (0.5x) — 50% of metrics
+- 'quarter' (0.25x) — 25% of metrics
+- **Rounding**: `Math.ceil((value * multiplier) / 5) * 5` (rounds to nearest 5)
+
+#### Module 4: ResultCalculator (Pure Functions) (`src/domain/result-calculator.ts`)
+Pure functions for aggregating workout results:
+- `calculateLapTimes(workout, completionTimestamps): LapTime[]` — Compute per-step split times
+- `aggregateMetrics(steps): { totalReps, totalDistance }` — Sum metrics (cardio distances only)
+- `finalizeResult(completions, aggregates, totalTime): WorkoutResult` — Package final result
+
+**Critical Details**:
+- No side effects — pure input → output
+- Cardio distances included, station distances excluded from totals
+- Split times calculated as time between consecutive step completions
+
+#### React Configuration Hook (`src/hooks/use-workout-config.ts`)
+Wraps `WorkoutConfigManager` for React:
+- State: `config` and re-render trigger
+- Methods: All `WorkoutConfigManager` methods proxied
+- Error handling: Catches and logs invalid operations
+- Re-render forcing: Uses dummy `setTick()` pattern
 
 #### Audio (`src/utils/timer-alert.ts`)
 - `configureTimerAlertAudio()` — Initializes audio system
-- `playTimerCompleteAlert()` — Plays timer completion sound (timer-complete.wav)
+- `playTimerCompleteAlert(audioPlayer)` — Plays timer completion sound (timer-complete.wav)
 
 #### Theme System (`src/hooks/use-theme.ts`, `src/constants/theme.ts`)
 - `useTheme()` — Returns current theme colors based on device color scheme
@@ -143,19 +225,28 @@ These files are loaded automatically based on the target platform.
 
 ### Workout Data Flow
 The app follows a **configuration → generation → playback** pattern:
-1. User configures workout in home screen (`index.tsx`) via `useWodWorkout()` hook
-2. On "Generate", the hook's `generate()` method creates a `Workout` object with randomized steps
+1. User configures workout in home screen (`index.tsx`) via `useWorkoutConfig()` hook (wraps `WorkoutConfigManager`)
+2. On "Generate", config is passed to `generateWorkout()` which creates a randomized `Workout` object
 3. Workout is stored via `setCurrentWorkout()` (singleton in `workout-store.ts`)
 4. Navigation to `/workout` screen, which retrieves it via `getCurrentWorkout()`
-5. Workout player (`useWorkoutPlayer()`) manages step-by-step progression
-6. On completion, `clearCurrentWorkout()` cleans up the singleton
+5. Workout screen creates `WorkoutPlayback` instance to own execution state and timing
+6. `WorkoutPlayback` manages step-by-step progression and calculates results
+7. On completion, `clearCurrentWorkout()` cleans up the singleton
 
-This pattern avoids route params or context for large objects while keeping state simple.
+This pattern avoids route params or context for large objects while keeping state simple and testable.
 
 ### State Management
-- Hook-based (`useState`, `useCallback`, `useRef`)
-- Refs used to prevent stale closures in callbacks (see `onCompleteRef` in timer hook)
-- Workout-level state managed in `useWodWorkout()` and `useWorkoutPlayer()`
+**Configuration** (`index.tsx`):
+- `WorkoutConfigManager` class owns config state, validation, and presets
+- `useWorkoutConfig()` hook provides React interface to the manager
+- State updates via `updateConfig()`, `toggleStation()`, `toggleCardioType()`, `applyPreset()`
+
+**Playback** (`workout.tsx`):
+- `WorkoutPlayback` class owns timer, step progression, and results
+- Single instance per workout session (created on mount, cleaned up on unmount)
+- State accessed via immutable `playback.state` snapshot
+- Timer ticks via `setInterval` owned by `WorkoutPlayback` (not React)
+- Display updates via dummy `setTick()` state in component (forces re-render every 1s)
 
 ### Randomization
 - Workouts use **Fisher-Yates shuffle** for station randomization (see `generate-workout.ts`)
@@ -238,38 +329,48 @@ Refer to https://docs.expo.dev/develop/unit-testing/ for Expo Jest setup.
    ├─ Displays current step with metrics
    ├─ Shows progress: "Step X of Y"
    ├─ TIMER DISPLAY (sticky at top)
-   │  └─ Shows time elapsed in MM:SS format
+   │  └─ Shows **TOTAL elapsed time** in MM:SS format (never resets, runs from 0:00 to finish)
    │
-   └─ Button workflow (CRITICAL):
-      ├─ Initial state: isRunning = false
-      │  ├─ Button label: "START"
+   └─ Button workflow (CRITICAL - Bookend Pattern):
+      ├─ Initial state: isRunning = false, currentStepIndex = 0
+      │  ├─ Button label: **"START"** (only appears here)
       │  └─ Timer display: 0:00
       │
       ├─ After START pressed:
-      │  ├─ isRunning = true
-      │  ├─ Button label: "NEXT" (or "FINISH" if last step)
-      │  ├─ Timer: increments 0:01, 0:02, 0:03... each second
-      │  └─ workoutStartTime recorded
+      │  ├─ isRunning = true, workoutStartTime recorded
+      │  ├─ Button label changes to **"NEXT"** immediately
+      │  ├─ Timer: increments 0:01, 0:02, 0:03... continuously (cumulative total)
+      │  └─ Step 1 begins execution
       │
-      ├─ After NEXT pressed:
-      │  ├─ isRunning = false
-      │  ├─ Button label: "START"
-      │  ├─ Timer resets: 0:00
+      ├─ After each NEXT pressed (steps 2 through N-1):
+      │  ├─ Step completion recorded (for split times)
       │  ├─ currentStepIndex increments
-      │  ├─ Step completion recorded
-      │  └─ elapsedSeconds reset to 0
+      │  ├─ Button stays **"NEXT"** (doesn't reset to START)
+      │  ├─ Timer continues counting (0:15, 0:16, 0:17...)
+      │  ├─ Next step auto-starts (isRunning stays true)
+      │  └─ Split time calculated from last completion to now
+      │
+      ├─ On last step (Step N-1):
+      │  ├─ Button label changes from "NEXT" to **"FINISH"**
+      │  ├─ Timer still running and counting
+      │  └─ User can continue or press FINISH
       │
       └─ After FINISH pressed (on last step):
          ├─ isFinished = true
-         ├─ Results calculated
+         ├─ All step completions recorded
+         ├─ Results calculated with **total time = elapsed time from START to FINISH**
          └─ Navigate to results screen
 
-3. RESULTS SCREEN
-   ├─ Display total time
-   ├─ Display split times for each step
+   **Button Sequence for 10-step workout**: START → NEXT → NEXT → NEXT → NEXT → NEXT → NEXT → NEXT → NEXT → FINISH
+
+3. RESULTS SCREEN (src/app/workout.tsx)
+   ├─ Display **Total Time** (cumulative from START to FINISH, e.g., "5:42")
+   ├─ Display **Split Times** for each step (per-step times between progressions)
+   ├─ Display **Total Reps** (sum of all station reps)
+   ├─ Display **Total Distance** (sum of cardio distances only)
    ├─ Share results option
    └─ "NEW WORKOUT" button
-      └─ Navigate back to HOME SCREEN
+      └─ Clear workout singleton and navigate back to HOME SCREEN
 
 ```
 
@@ -280,24 +381,34 @@ Refer to https://docs.expo.dev/develop/unit-testing/ for Expo Jest setup.
 ### Module 1: WorkoutPlayback (State Machine)
 **File**: `src/domain/workout-playback.ts`
 
-**Responsibility**: Owns complete workout execution state and timing
+**Responsibility**: Owns complete workout execution state, timer lifecycle, step progression, and results calculation.
 
-**Critical Methods**:
-- `startStep()` - Starts timer, sets isRunning=true
-- `advanceStep()` - Records completion, resets timer, moves to next step
-- `finishWorkout()` - Completes entire workout, calculates results
+**State Machine Flow**:
+1. `startStep()` → Records workout start time (first call only), starts 1-second timer interval, sets isRunning=true
+2. `advanceStep()` → Records step completion, stops current timer, increments step index, auto-starts next step's timer
+3. On final step: `advanceStep()` sets isFinished=true, stops timer, calls `finishWorkout()`
 
-**State Property**: Immutable snapshot with:
-- `currentStepIndex` - Which step we're on
-- `isRunning` - Is timer active?
-- `isFinished` - Is workout complete?
-- `elapsedSeconds` - Time elapsed for current step
-- `workoutResult` - Final results (null until finished)
+**Public API**:
+- `state: WorkoutState` — Immutable snapshot (currentStepIndex, currentStep, isRunning, isFinished, progress, workoutResult)
+- `totalElapsedSeconds: number` — Total time from workout start to now (use for display timer)
+- `startStep(): void` — Begin current step, start timer
+- `advanceStep(): void` — Move to next step, auto-start timer for non-final steps, record completion
+- `finishWorkout(): void` — End workout, calculate results
+- `canAdvance(): boolean` — Is advancing allowed?
+- `isOnLastStep(): boolean` — On final step?
+- `cleanup(): void` — Stop timer on unmount
+
+**Critical Implementation Details**:
+- Timer lifecycle owned by WorkoutPlayback (setInterval), not React — eliminates dependency issues
+- `elapsedSeconds` is per-step and resets; use `totalElapsedSeconds` for display timer
+- Results calculated from `workoutStartTime` to `Date.now()` at finish time
+- `advanceStep()` keeps isRunning=true for non-final steps (bookend pattern: START...NEXT...FINISH)
+- Step completion times tracked in Map for split time calculation
 
 **DO NOT**:
-- ❌ Call methods that throw errors - they now fail silently
-- ❌ Assume isRunning stays true - it resets on advanceStep()
-- ❌ Trust elapsedSeconds between renders - use state snapshot
+- ❌ Use `elapsedSeconds` for display timer — use `totalElapsedSeconds`
+- ❌ Create multiple WorkoutPlayback instances per session — one per workout
+- ❌ Assume isRunning changes on advanceStep() — it stays true except on last step
 
 ### Module 2: WorkoutConfigManager (Configuration)
 **File**: `src/domain/workout-config-manager.ts`
@@ -343,43 +454,82 @@ Refer to https://docs.expo.dev/develop/unit-testing/ for Expo Jest setup.
 
 ## ⚠️ Common Pitfalls (AVOID THESE)
 
-### 1. Timer Not Updating
+### 1. Using `elapsedSeconds` for Display Timer
+**Problem**: Timer resets between steps, should show cumulative total
+**Cause**: `elapsedSeconds` tracks current step only
+**Fix**: Use `playback.totalElapsedSeconds` instead for display, not `state.elapsedSeconds`
+
+### 2. Button Sequence Breaking (Shows START on Every Step)
+**Problem**: Button shows "START" for every step instead of bookend pattern
+**Cause**: `advanceStep()` not auto-starting next step's timer, or setting isRunning=false
+**Fix**: `advanceStep()` must call `startTimer()` for non-final steps, keep isRunning=true
+
+### 3. Results Total Time Wrong
+**Problem**: Results show only last step's time, not total workout time
+**Cause**: `calculateResults()` using `elapsedSeconds` instead of workoutStartTime
+**Fix**: Calculate total as `Math.floor((Date.now() - this.workoutStartTime) / 1000)`
+
+### 4. Timer Not Incrementing
 **Problem**: Timer shows 0:00 and doesn't increment
 **Cause**: Component not re-rendering every second
 **Fix**: Use `setTick(prev => prev + 1)` in 1-second interval AND in button press handler
 
-### 2. Button Not Responding
-**Problem**: User clicks START, button stays START, timer doesn't start
-**Cause**: Component doesn't re-render after button press
+### 5. Button Click Not Reflecting State Change
+**Problem**: User clicks button, state changes in WorkoutPlayback but UI doesn't update
+**Cause**: Component not re-rendering after button press
 **Fix**: Must call `setTick()` in handleButtonPress to force immediate re-render
 
-### 3. Config Corruption on Invalid Toggle
-**Problem**: User tries to remove only cardio type, state gets corrupted
-**Cause**: Mutation before validation
-**Fix**: Validate BEFORE modifying, only update if validation passes
+### 6. Config Corruption on Invalid Toggle
+**Problem**: User tries to remove only cardio type, app crashes or state corrupts
+**Cause**: Validation not run before modification, or invalid state applied
+**Fix**: WorkoutConfigManager tests new state before committing, silently rejects invalid toggles
 
-### 4. Shallow Config Snapshots
-**Problem**: Array selections not updating in UI
-**Cause**: Config getter returns shallow spread
-**Fix**: Must spread arrays too: `{ ...config, selectedStations: [...stations], ... }`
+### 7. Split Times All 00:00
+**Problem**: Results show zero split times for all steps
+**Cause**: Step completion times not recorded, or recorded incorrectly
+**Fix**: Ensure `recordStepCompletion()` called in `advanceStep()` for each step completed
 
-### 5. Validation Errors Silently Breaking
-**Problem**: Silent errors mean app appears to do nothing
-**Solution**: This is intentional - operations that would make config invalid are simply ignored
+### 8. Configuration Not Persisting
+**Problem**: User selects stations, they deselect on next render
+**Cause**: Config getter returning references instead of copies
+**Fix**: Config getter must spread arrays: `{ ...config, selectedStations: [...stations], selectedCardioTypes: [...cardioTypes] }`
 
 ---
 
 ## 🔧 For Next Session: Quick Checklist
 
-Before making changes, verify:
-- [ ] Start `npm run web` and test the FULL workflow (Home → Generate → Play all steps → Results)
-- [ ] Timer counts up from 0:00 when START pressed
-- [ ] Button changes to NEXT immediately when pressed
-- [ ] NEXT resets timer to 0:00
-- [ ] On last step, button shows FINISH
-- [ ] FINISH shows results with split times
-- [ ] "NEW WORKOUT" button goes back home
-- [ ] Linting: `npm run lint` = 0 errors
-- [ ] TypeScript: `npx tsc --noEmit` = 0 errors
+**CRITICAL: Test the complete workflow before making ANY changes.**
 
-If ANY of the above fail, do NOT proceed with feature changes - fix the broken workflow first.
+Start `npm run web` and verify (on a fresh test):
+
+**Home Screen**:
+- [ ] Loads with Intermediate preset (5 stations, "run" cardio)
+- [ ] Can toggle stations/cardio types without errors
+- [ ] "Generate Workout" button enabled when 3+ stations + 1+ cardio selected
+
+**Workout Playback** (button sequence is CRITICAL):
+- [ ] Initial button shows **"START"** (only once)
+- [ ] Clicking START → button immediately changes to **"NEXT"**
+- [ ] Timer starts from 0:00 and increments 0:01, 0:02, 0:03...
+- [ ] Clicking NEXT → step advances, button stays **"NEXT"**
+- [ ] Timer continues counting (0:05, 0:06...) **does NOT reset**
+- [ ] Repeat NEXT through all intermediate steps
+- [ ] On last step → button changes to **"FINISH"**
+- [ ] Clicking FINISH → navigate to results screen
+
+**Results Screen**:
+- [ ] Total Time displays and matches final timer value
+- [ ] Split times show per-step times (not all 00:00)
+- [ ] Total Reps and Total Distance displayed
+- [ ] "NEW WORKOUT" button returns to home screen
+
+**Code Quality**:
+- [ ] `npm run lint` = 0 errors
+- [ ] `npx tsc --noEmit` = 0 errors
+- [ ] No console errors or warnings
+
+**IF ANY FAIL**: Do NOT proceed with feature changes — diagnose and fix the broken workflow first. Common issues:
+- Timer resetting? → Check `totalElapsedSeconds` in display, not `elapsedSeconds`
+- Button showing START twice? → Check `advanceStep()` auto-starts next timer
+- Results time wrong? → Check `calculateResults()` uses `workoutStartTime`, not `elapsedSeconds`
+- Split times zero? → Check `recordStepCompletion()` called in `advanceStep()`
